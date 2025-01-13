@@ -1,10 +1,16 @@
 from src.data_utils import data_loader
 from pathlib import Path
+import sys
 
 
-RAW_DATA_PATH = Path(
-    "Z:\\Keep Control\\Data\\lab dataset\\rawdata"
-)
+if sys.platform == "linux":
+    RAW_DATA_PATH = Path(
+        "/mnt/neurogeriatrics_data/Keep Control/Data/lab dataset/rawdata"
+    )
+elif sys.platform == "win32":
+    RAW_DATA_PATH = Path(
+        "Z:\\Keep Control\\Data\\lab dataset\\rawdata"
+    )
 
 
 def main() -> None:
