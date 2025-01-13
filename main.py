@@ -3,13 +3,19 @@ from src.preprocessing.filter import (
     butter_lowpass_filter, butter_highpass_filter
 )
 from pathlib import Path
+import sys
 import pandas as pd
 import src
 
 
-RAW_DATA_PATH = Path(
-    "Z:\\Keep Control\\Data\\lab dataset\\rawdata"
-)
+if sys.platform == "linux":
+    RAW_DATA_PATH = Path(
+        "/mnt/neurogeriatrics_data/Keep Control/Data/lab dataset/rawdata"
+    )
+elif sys.platform == "win32":
+    RAW_DATA_PATH = Path(
+        "Z:\\Keep Control\\Data\\lab dataset\\rawdata"
+    )
 TASK_NAMES = [
     "walkPreferred", "walkFast", "walkSlow"
 ]
