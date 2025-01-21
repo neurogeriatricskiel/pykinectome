@@ -3,7 +3,8 @@ from src.preprocessing.filter import (
     butter_lowpass_filter
 )
 # from src.kinectome import calculate_crl_mtrx
-from src.preprocessing import interpolate, align
+from src.preprocessing import interpolate, align, filter
+from src import kinectome
 from pathlib import Path
 import sys
 import pandas as pd
@@ -51,15 +52,19 @@ def main() -> None:
                 data = data_loader.load_file(file_path=file_path)
 
                 # Fill the gaps
-                interpolated_data = interpolate(data)
+                interpolated_data = interpolate.fill_gaps(data)
 
                 # Filtering
-                preprocessed_data = butter_lowpass_filter(data=interpolated_data, fs=200., cutoff=5.0)
+                preprocessed_data = filter.butter_lowpass_filter(data=interpolated_data, fs=200., cutoff=5.0)
+
+                # Principal component analysis (to align )
+
+                rotated_data = align.pca(data=preprocessed_data)
         
                 # Calculate kinectome
-                kinectome = src.kinectome.calculate(preprocessed_data)
+                kinectome = src.kinectome.calculate_kinectome(data=rotated_data)
         
-                # Modulatiry anal
+                # Modularity analysis
 
     return
 
