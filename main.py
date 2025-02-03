@@ -12,6 +12,7 @@ import src
 import os
 
 
+
 if sys.platform == "linux":
     RAW_DATA_PATH = Path(
         "/mnt/neurogeriatrics_data/Keep Control/Data/lab dataset/rawdata"
@@ -73,15 +74,15 @@ def main() -> None:
                     # Load the data as a pandas dataframe
                     data = data_loader.load_file(file_path=file_path)
 
-                    # Fill the gaps
-                    interpolated_data = interpolate.fill_gaps(data, task_name)
+                    # Fill the gaps and filter the data
+                    interpolated_data = interpolate.fill_gaps(data, task_name, fc=6, threshold=200) # fc = cut-off for the butterworth filter; threshold = maximum allowed data gap
 
                     # Filtering
-                    preprocessed_data = filter.butter_lowpass_filter(data=interpolated_data, fs=200., cutoff=5.0)
+                    # preprocessed_data = filter.butter_lowpass_filter(data=interpolated_data, fs=200., cutoff=5.0)
 
                     # Principal component analysis (to align )
 
-                    rotated_data = align.pca(data=preprocessed_data)
+                    rotated_data = align.pca(data=interpolated_data)
             
                     # Calculate kinectome
                     kinectome = src.kinectome.calculate_kinectome(data=rotated_data)
