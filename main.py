@@ -58,7 +58,7 @@ def main() -> None:
                     file_path = None  # Initialize file_path for each loop
 
                     for file in file_list:
-                        if sub_id in file and task_name in file and tracksys in file:
+                        if sub_id in file and task_name in file and tracksys in file and 'motion' in file:
                             # Check if the 'run' condition matches 
                             if any(f"run-{r}" in file for r in RUN):
                                 file_path = f"{RAW_DATA_PATH}\\sub-{sub_id}\\motion\\{file}"
@@ -69,18 +69,12 @@ def main() -> None:
                                 file_path = f"{RAW_DATA_PATH}\\sub-{sub_id}\\motion\\{file}"
                                 break
                             
-                            
-                        #     and run in file:
-                        #     file_path = f"{RAW_DATA_PATH}\\sub-{sub_id}\\motion\\{file}"
-                        # elif sub_id in file and task_name in file and tracksys in file and 'run-off' not in file:
-                        #     file_path = f"{RAW_DATA_PATH}\\sub-{sub_id}\\motion\\{file}"
-
                 if file_path:
                     # Load the data as a pandas dataframe
                     data = data_loader.load_file(file_path=file_path)
 
                     # Fill the gaps
-                    interpolated_data = interpolate.fill_gaps(data)
+                    interpolated_data = interpolate.fill_gaps(data, task_name)
 
                     # Filtering
                     preprocessed_data = filter.butter_lowpass_filter(data=interpolated_data, fs=200., cutoff=5.0)
@@ -96,7 +90,7 @@ def main() -> None:
 
                 else:
                     print(f"No matching file found for sub-{sub_id}, task-{task_name}, tracksys-{tracksys}, run-{run}")
-                    
+
     return
 
 
