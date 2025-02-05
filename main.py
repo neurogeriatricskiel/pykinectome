@@ -74,15 +74,9 @@ def main() -> None:
                     # Load the data as a pandas dataframe
                     data = data_loader.load_file(file_path=file_path)
 
-                    # reduce the data dimentions (clusters calculated into one point etc.)
-                    reduced_data = trim_data.reduce_dimensions(data, sub_id, task_name)
-
-                    if reduced_data is None:
-                        continue
-
                     # trim the data to be between the start and finish lines (5m walk)
-                    trimmed_data = trim_data.startStop(reduced_data, sub_id, task_name, run)
-                    
+                    trimmed_data = trim_data.startStop(data, sub_id, task_name, run)
+
                     # if events file not found, start or stop event onset is missing or onsets do not match the data length
                     if trimmed_data is None:
                         continue
@@ -90,17 +84,23 @@ def main() -> None:
                         print(f'Dataframe of subject {sub_id} during task {task_name} is empty. Check the event file')
                         continue # exit the function
 
+                    # recalculate the positions of clusters (always at fixed distance between one another)
+                    # full_cluster_data = interpolate.recacl_clusters(trimmed_data, sub_id, task_name)
+
+                    # reduce the data dimensions (cluster markers calculated into one point)
+                    reduced_data = trim_data.reduce_dimensions_clusters(trimmed_data, sub_id, task_name)
+
+                    if reduced_data is None:
+                        continue                    
+
+
                     # Fill the gaps and filter the data (filter function available in kinetics toolkit)
-                    interpolated_data = interpolate.fill_gaps(trimmed_data, sub_id, task_name, fc=6, threshold=271) # fc = cut-off for the butterworth filter; threshold = maximum allowed data gap
-                    
+                    interpolated_data = interpolate.fill_gaps(reduced_data, sub_id, task_name, fc=6, threshold=271) # fc = cut-off for the butterworth filter; threshold = maximum allowed data gap
 
-                    # Filtering
-                    # preprocessed_data = filter.butter_lowpass_filter(data=interpolated_data, fs=200., cutoff=5.0)
+                    # Principal component analysis (to align the x axis with walking direction)
+                    rotated_data = align.rotate_data(interpolated_data, sub_id, task_name)
 
-                    # Principal component analysis (to align )
-
-                    # rotated_data = align.pca(data=interpolated_data)
-            
+                                
                     # Calculate kinectome
                     # kinectome = src.kinectome.calculate_kinectome(data=rotated_data)
             
