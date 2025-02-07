@@ -36,27 +36,33 @@ def rotate_data(data: pd.DataFrame, sub_id: str, task_name: str):
     # Prepare data for PCA (x and y positions)
     pca_data = pd.DataFrame(mid_hip)
 
-    # Get rotation matrix
-    rotation_matrix = pca(pca_data)
+    # check if pelvic data contains NaNs (if so, PCA is impossible; therefore skip this task)
+    if pca_data.isna().any().any():
+        print(f'{sub_id} during {task_name} has NaN values in the pelvis marker data. Unable to run PCA. Skipping...')
+        return None
+    
+    else:
+        # Get rotation matrix
+        rotation_matrix = pca(pca_data)
 
-    # Prepare rotated dataframe
-    rotated_data = data.copy()
+        # Prepare rotated dataframe
+        rotated_data = data.copy()
 
-    # Find all x and y position columns
-    x_cols = [col for col in data.columns if col.endswith('_POS_x')]
-    y_cols = [col for col in data.columns if col.endswith('_POS_y')]
+        # Find all x and y position columns
+        x_cols = [col for col in data.columns if col.endswith('_POS_x')]
+        y_cols = [col for col in data.columns if col.endswith('_POS_y')]
 
-    # Rotate x and y positions
-    for x_col, y_col in zip(x_cols, y_cols):
-        # Create coordinate matrix
-        coords = data[[x_col, y_col]].values
-        
-        # Rotate coordinates
-        rotated_coords = np.dot(coords, rotation_matrix.T)
-        
-        # Update dataframe
-        rotated_data[x_col] = rotated_coords[:, 0]
-        rotated_data[y_col] = rotated_coords[:, 1]
+        # Rotate x and y positions
+        for x_col, y_col in zip(x_cols, y_cols):
+            # Create coordinate matrix
+            coords = data[[x_col, y_col]].values
+            
+            # Rotate coordinates
+            rotated_coords = np.dot(coords, rotation_matrix.T)
+            
+            # Update dataframe
+            rotated_data[x_col] = rotated_coords[:, 0]
+            rotated_data[y_col] = rotated_coords[:, 1]
     
     return rotated_data
 
