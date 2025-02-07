@@ -53,6 +53,10 @@ def startStop(data: pd.DataFrame, sub_id: str, task_name: str, run: str) -> pd.D
     # Cut the data to be between start and stop
     trimmed_data = data[start_onset:stop_onset]
 
+    # remove the start and marker positions
+    trimmed_data = trimmed_data.drop(columns=data.filter(regex=r'(start_)\d+_POS_(x|y|z|err)').columns)
+    trimmed_data = trimmed_data.drop(columns=data.filter(regex=r'(end_)\d+_POS_(x|y|z|err)').columns)
+
     return trimmed_data 
 
 import pandas as pd
