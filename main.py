@@ -17,9 +17,15 @@ if sys.platform == "linux":
     RAW_DATA_PATH = Path(
         "/mnt/neurogeriatrics_data/Keep Control/Data/lab dataset/rawdata"
     )
+    BASE_PATH = Path(
+        "/mnt/neurogeriatrics_data/Keep Control/Data/lab dataset"
+    )
 elif sys.platform == "win32":
     RAW_DATA_PATH = Path(
         "Z:\\Keep Control\\Data\\lab dataset\\rawdata"
+    )
+    BASE_PATH = Path(
+        "Z:\\Keep Control\\Data\\lab dataset"
     )
 
 TASK_NAMES = [
@@ -43,11 +49,12 @@ def main() -> None:
     all_control_sub_ids = select_subjects.select_subjects_ids(demographics_df, diagnosis = ['diagnosis_old', 'diagnosis_young'])
     matched_control_sub_ids = select_subjects.make_control_group(demographics_df, control_ids=all_control_sub_ids, treatment_ids=pd_sub_ids)
     
-    # for row_idx, row in matched_control_sub_ids.iterrows():
-        # sub_id = f"pp{row['id']:>03d}"
-        
+    # use for debugging particular subjects
+    debug_ids = ['pp140']
+
     # file name is based on task names and tracking systems defined above
     for sub_id in pd_sub_ids + matched_control_sub_ids:
+    # for sub_id in debug_ids: # use this line for inspecting single subjects with known IDs
         for task_name in TASK_NAMES:
             for tracksys in TRACKING_SYSTEMS:
                 for run in RUN:
@@ -100,9 +107,13 @@ def main() -> None:
                     # Principal component analysis (to align the x axis with walking direction)
                     rotated_data = align.rotate_data(interpolated_data, sub_id, task_name)
 
-                                
-                    # Calculate kinectome
-                    # kinectome = src.kinectome.calculate_kinectome(data=rotated_data)
+                    # returns None when rotated_data is completely missing one of the pelvic markers (PCA is based on pelvic coordinate system)
+                    if rotated_data is None:
+                        continue        
+
+                    # Calculate kinectomes (for each gait cycle) and save in derived_data/kinectome
+                    # can be done only once for each derivative (position, velocity, acceleration etc.) and then commented out to save on running time
+                    kinectomes = kinectome.calculate_kinectome(rotated_data, sub_id, task_name, run, tracksys, BASE_PATH)
             
                     # Modularity analysis
 
