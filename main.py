@@ -3,7 +3,7 @@ from src.preprocessing.filter import (
     butter_lowpass_filter
 )
 # from src.kinectome import calculate_crl_mtrx
-from src.preprocessing import interpolate, align, filter, trim_data
+from src.preprocessing import interpolate, align, filter, trim_data, differentiation
 from src import kinectome
 from pathlib import Path
 import sys
@@ -36,8 +36,11 @@ TRACKING_SYSTEMS = [
 ] # add "imu" if needed
 RUN = [
     'on'
-] # add 'off' if needed 
-
+        ] # add 'off' if needed 
+KINEMATICS = [
+      'pos', 'vel', 'acc'
+                ] # for calculating kinectomes using position, velocity and acceleration data (what about jerk?)
+FS = 200 # sampling rate 
 
 def main() -> None:
     demographics_df = pd.read_excel(
@@ -52,73 +55,82 @@ def main() -> None:
     # use for debugging particular subjects
     debug_ids = ['pp140']
 
-    # file name is based on task names and tracking systems defined above
-    for sub_id in pd_sub_ids + matched_control_sub_ids:
-    # for sub_id in debug_ids: # use this line for inspecting single subjects with known IDs
-        for task_name in TASK_NAMES:
-            for tracksys in TRACKING_SYSTEMS:
-                for run in RUN:
+    # 
+    for kinematics in KINEMATICS:
+        # file name is based on task names and tracking systems defined above
+        for sub_id in pd_sub_ids + matched_control_sub_ids:
+        # for sub_id in debug_ids: # use this line for inspecting single subjects with known IDs
+            for task_name in TASK_NAMES:
+                for tracksys in TRACKING_SYSTEMS:
+                    for run in RUN:
+                        
+                        # change current working directory to the folder with motion data
+                        os.chdir(f'{RAW_DATA_PATH}\\sub-{sub_id}\\motion')
+                        file_list = os.listdir()
 
-                    # change current working directory to the folder with motion data
-                    os.chdir(f'{RAW_DATA_PATH}\\sub-{sub_id}\\motion')
-                    file_list = os.listdir()
+                        file_path = None  # Initialize file_path for each loop
 
-                    file_path = None  # Initialize file_path for each loop
+                        for file in file_list:
+                            if sub_id in file and task_name in file and tracksys in file and 'motion' in file:
+                                # Check if the 'run' condition matches 
+                                if any(f"run-{r}" in file for r in RUN):
+                                    file_path = f"{RAW_DATA_PATH}\\sub-{sub_id}\\motion\\{file}"
+                                    break # Exit the loop once a matching file is found
 
-                    for file in file_list:
-                        if sub_id in file and task_name in file and tracksys in file and 'motion' in file:
-                            # Check if the 'run' condition matches 
-                            if any(f"run-{r}" in file for r in RUN):
-                                file_path = f"{RAW_DATA_PATH}\\sub-{sub_id}\\motion\\{file}"
-                                break # Exit the loop once a matching file is found
+                                # Include files without any 'run-on' or 'run-off' condition (run-on and run-off are only applicable to PD)
+                                elif not any(f"run-{cond}" in file for cond in ["on", "off"]):
+                                    file_path = f"{RAW_DATA_PATH}\\sub-{sub_id}\\motion\\{file}"
+                                    break
+                                
+                        if file_path:
+                            # Load the data as a pandas dataframe
+                            data = data_loader.load_file(file_path=file_path)
 
-                            # Include files without any 'run-on' or 'run-off' condition (run-on and run-off are only applicable to PD)
-                            elif not any(f"run-{cond}" in file for cond in ["on", "off"]):
-                                file_path = f"{RAW_DATA_PATH}\\sub-{sub_id}\\motion\\{file}"
-                                break
+                            # trim the data to be between the start and finish lines (5m walk)
+                            trimmed_data = trim_data.startStop(data, sub_id, task_name, run)
+
+                            # if events file not found, start or stop event onset is missing or onsets do not match the data length
+                            if trimmed_data is None:
+                                continue
+                            elif trimmed_data.empty:        
+                                print(f'Dataframe of subject {sub_id} during task {task_name} is empty. Check the event file')
+                                continue # exit the function
+
+                            # recalculate the positions of clusters (always at fixed distance between one another)
+                            # full_cluster_data = interpolate.recacl_clusters(trimmed_data, sub_id, task_name)
+
+                            # reduce the data dimensions (cluster markers calculated into one point)
+                            reduced_data = trim_data.reduce_dimensions_clusters(trimmed_data, sub_id, task_name)
+
+                            if reduced_data is None:
+                                continue                    
+
+
+                            # Fill the gaps and filter the data (filter function available in kinetics toolkit)
+                            interpolated_data = interpolate.fill_gaps(reduced_data, sub_id, task_name, fc=6, threshold=271) # fc = cut-off for the butterworth filter; threshold = maximum allowed data gap
+
+                            # Principal component analysis (to align the x axis with walking direction)
+                            rotated_data = align.rotate_data(interpolated_data, sub_id, task_name)
+
+                            # returns None when rotated_data is completely missing one of the pelvic markers (PCA is based on pelvic coordinate system)
+                            if rotated_data is None:
+                                continue        
                             
-                if file_path:
-                    # Load the data as a pandas dataframe
-                    data = data_loader.load_file(file_path=file_path)
+                            if kinematics == 'pos':
+                                data = rotated_data
+                            elif kinematics == 'vel':
+                                data = differentiation.velocity(rotated_data, FS)
+                            elif kinematics == 'acc':
+                                data = differentiation.acceleration(rotated_data, FS)
 
-                    # trim the data to be between the start and finish lines (5m walk)
-                    trimmed_data = trim_data.startStop(data, sub_id, task_name, run)
+                            # Calculate kinectomes (for each gait cycle) and save in derived_data/kinectome
+                            # can be done only once for each derivative (position, velocity, acceleration etc.) and then commented out to save on running time
+                            kinectomes = kinectome.calculate_kinectome(data, sub_id, task_name, run, tracksys, kinematics, BASE_PATH)
+                    
+                            # Modularity analysis
 
-                    # if events file not found, start or stop event onset is missing or onsets do not match the data length
-                    if trimmed_data is None:
-                        continue
-                    elif trimmed_data.empty:        
-                        print(f'Dataframe of subject {sub_id} during task {task_name} is empty. Check the event file')
-                        continue # exit the function
-
-                    # recalculate the positions of clusters (always at fixed distance between one another)
-                    # full_cluster_data = interpolate.recacl_clusters(trimmed_data, sub_id, task_name)
-
-                    # reduce the data dimensions (cluster markers calculated into one point)
-                    reduced_data = trim_data.reduce_dimensions_clusters(trimmed_data, sub_id, task_name)
-
-                    if reduced_data is None:
-                        continue                    
-
-
-                    # Fill the gaps and filter the data (filter function available in kinetics toolkit)
-                    interpolated_data = interpolate.fill_gaps(reduced_data, sub_id, task_name, fc=6, threshold=271) # fc = cut-off for the butterworth filter; threshold = maximum allowed data gap
-
-                    # Principal component analysis (to align the x axis with walking direction)
-                    rotated_data = align.rotate_data(interpolated_data, sub_id, task_name)
-
-                    # returns None when rotated_data is completely missing one of the pelvic markers (PCA is based on pelvic coordinate system)
-                    if rotated_data is None:
-                        continue        
-
-                    # Calculate kinectomes (for each gait cycle) and save in derived_data/kinectome
-                    # can be done only once for each derivative (position, velocity, acceleration etc.) and then commented out to save on running time
-                    kinectomes = kinectome.calculate_kinectome(rotated_data, sub_id, task_name, run, tracksys, BASE_PATH)
-            
-                    # Modularity analysis
-
-                else:
-                    print(f"No matching file found for sub-{sub_id}, task-{task_name}, tracksys-{tracksys}, run-{run}")
+                        else:
+                            print(f"No matching file found for sub-{sub_id}, task-{task_name}, tracksys-{tracksys}, run-{run}")
 
     return
 
