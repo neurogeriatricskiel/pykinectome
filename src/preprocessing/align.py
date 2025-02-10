@@ -38,7 +38,7 @@ def rotate_data(data: pd.DataFrame, sub_id: str, task_name: str):
 
     # check if pelvic data contains NaNs (if so, PCA is impossible; therefore skip this task)
     if pca_data.isna().any().any():
-        print(f'{sub_id} during {task_name} has NaN values in the pelvis marker data. Unable to run PCA. Skipping...')
+        print(f'{sub_id} during {task_name} has NaN values in the pelvic marker data. Unable to run PCA. Skipping...')
         return None
     
     else:
