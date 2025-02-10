@@ -87,7 +87,7 @@ def segment_data(data: pd.DataFrame, cycle_indices: tuple):
     return cycle_data
     
 
-def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: str, tracksys: str, base_path):
+def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: str, tracksys: str, kinematics: str, base_path):
     """
     Computes Pearson correlation matrices for marker positions in x, y, and z coordinates across gait cycles 
     and saves them as .npy files.
@@ -99,6 +99,7 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
     - run (str): Specifies the run condition (e.g., "on" or "off").
     - tracksys (str): The tracking system used for data collection.
     - base_path (str): Base directory where the kinectome data should be saved.
+    - kinematics (str): Marker position or its derivatives (velocity, acceleration) used for calculating kinectomes.
 
     Returns:
     - None: The function saves correlation matrices but does not return a value.
@@ -131,7 +132,7 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
             os.makedirs(kinectome_path)
 
         # Define file name (_pos_ for kinetomes of marker position data, vel - velocity, acc - acceleration)
-        file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_pos_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}.npy"
+        file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}.npy"
         file_path = os.path.join(kinectome_path, file_name)
 
         # Save kinectomes (as numpy array)
