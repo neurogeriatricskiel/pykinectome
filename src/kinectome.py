@@ -6,7 +6,7 @@ import matplotlib
 matplotlib.use('Agg')  # Use a non-interactive backend
 import matplotlib.pyplot as plt
 
-def find_gait_cycles(data: pd.DataFrame, sub_id: str, task_name: str, run: str):
+def find_gait_cycles(base_path, data: pd.DataFrame, sub_id: str, task_name: str, run: str):
     """
     Identifies full left and right gait cycles based on event markers within the valid time range.
 
@@ -21,17 +21,7 @@ def find_gait_cycles(data: pd.DataFrame, sub_id: str, task_name: str, run: str):
     - start_onset (int): The index corresponding to the start of the valid motion tracking period.
     """
 
-    file_list = os.listdir()
-    event_files = [file for file in file_list if task_name in file and 'events' in file]
-
-     # Filter event files based on 'run' condition
-    if any(f"run-{r}" in file for r in ['on', 'off'] for file in event_files):
-        event_files = [file for file in event_files if f"run-{run}" in file and '.tsv' in file]
-    else:
-        event_files = [file for file in event_files if not any(f"run-{r}" in file for r in ['on', 'off']) and '.tsv' in file]
-
-    
-    events = data_loader.load_file(event_files[0])
+    events = data_loader.load_events(base_path, sub_id, task_name, run)
 
     start_onset = int(events.loc[events['event_type'] == 'start', 'onset'].values[0])
     stop_onset = int(events.loc[events['event_type'] == 'stop', 'onset'].values[0])
@@ -105,7 +95,7 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
     - None: The function saves correlation matrices but does not return a value.
     """
 
-    gait_cycles, start_onset = find_gait_cycles(data, sub_id, task_name, run)
+    gait_cycles, start_onset = find_gait_cycles(base_path, data, sub_id, task_name, run)
 
     for i in range(len(gait_cycles)):
         cycle_indices = gait_cycles[i]
