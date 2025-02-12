@@ -113,14 +113,14 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
         gait_cycle_data = segment_data(data, cycle_indices)
 
         # Extract marker names
-        marker_names = sorted(set(col[:-6] for col in gait_cycle_data.columns if col.endswith('_POS_x')))
+        marker_names = sorted(set(col[:-6] for col in gait_cycle_data.columns if col.endswith(f'{kinematics.upper()}_x')))
         
         # Initialize correlation matrices
         num_markers = len(marker_names)
         correlation_matrices = np.zeros((num_markers, num_markers, 3))
 
         # Compute correlation for each coordinate (x, y, z)
-        for i, coord in enumerate(['_POS_x', '_POS_y', '_POS_z']):
+        for i, coord in enumerate([f'_{kinematics.upper()}_x', f'_{kinematics.upper()}_y', f'_{kinematics.upper()}_z']):
             markers = [m + coord for m in marker_names]
             correlation_matrices[:, :, i] = gait_cycle_data[markers].corr(method='pearson', min_periods=1)
 
