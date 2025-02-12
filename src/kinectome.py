@@ -132,7 +132,11 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
             os.makedirs(kinectome_path)
 
         # Define file name (_pos_ for kinetomes of marker position data, vel - velocity, acc - acceleration)
-        file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}.npy"
+        if run: # 'run-off' will appear in the kinectome file name
+            file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}.npy"
+        else: # 'run-on' will NOT appear iun the kinectome file name. should it? 
+            file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}.npy"
+        
         file_path = os.path.join(kinectome_path, file_name)
 
         # Save kinectomes (as numpy array)
