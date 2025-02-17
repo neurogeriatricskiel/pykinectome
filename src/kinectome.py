@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')  # Use a non-interactive backend
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 def find_gait_cycles(base_path, data: pd.DataFrame, sub_id: str, task_name: str, run: str):
     """
@@ -113,7 +114,7 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
         for i, coord in enumerate([f'_{kinematics.upper()}_x', f'_{kinematics.upper()}_y', f'_{kinematics.upper()}_z']):
             markers = [m + coord for m in marker_names]
             correlation_matrices[:, :, i] = gait_cycle_data[markers].corr(method='pearson', min_periods=1)
-
+     
         # directory to save 
         kinectome_path = f"{base_path}\\derived_data\\sub-{sub_id}\\kinectomes"
 
@@ -122,12 +123,29 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
             os.makedirs(kinectome_path)
 
         # Define file name (_pos_ for kinetomes of marker position data, vel - velocity, acc - acceleration)
-        if run: # 'run-off' will appear in the kinectome file name
+        if run: # 'run-off' or 'run-on' will appear in the kinectome file name
             file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}.npy"
-        else: # 'run-on' will NOT appear iun the kinectome file name. should it? 
+        else: 
             file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}.npy"
         
         file_path = os.path.join(kinectome_path, file_name)
 
         # Save kinectomes (as numpy array)
         np.save(file_path, correlation_matrices)        
+
+def visualise_kinectome(kinectome, figname):
+    """
+    plots the kinectomes in AP, ML and V directions (does not contain marker names)
+    for visualisation pusposes only
+    """
+
+    plt.figure(figsize=(15, 5))
+    for i, matrix in enumerate(kinectome.transpose(2, 0, 1)):  # Iterate over 3 matrices
+        plt.subplot(1, 3, i + 1)  # Create subplot
+        sns.heatmap(matrix, cmap="coolwarm", vmin=-1, vmax=1, square=True, cbar=True)
+        plt.title(f"Correlation Matrix {['Anteroposterior', 'Mediolateral', 'Vertical'][i]}")
+
+    # matplotlib crashing when running interactively, therefore save the figure (adjust the figure name) to see it    
+    os.chdir('C:/Users/Karolina/Desktop/pykinectome/pykinectome/src/preprocessing')
+    plt.tight_layout()  # Adjust layout to prevent overlap
+    plt.savefig(figname, dpi=600) # 
