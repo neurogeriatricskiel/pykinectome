@@ -4,7 +4,7 @@ from src.preprocessing.filter import (
 )
 # from src.kinectome import calculate_crl_mtrx
 from src.preprocessing import interpolate, align, filter, trim_data, differentiation
-from src import kinectome
+from src import kinectome, modularity
 from pathlib import Path
 import sys
 import pandas as pd
@@ -38,7 +38,7 @@ RUN = [
     'on'
         ] # add 'off' if needed 
 KINEMATICS = [
-      'pos', 'vel', 'acc'
+       'acc', 'vel', 'pos'
                 ] # for calculating kinectomes using position, velocity and acceleration data (what about jerk?)
 FS = 200 # sampling rate 
 
@@ -55,7 +55,6 @@ def main() -> None:
     # use for debugging particular subjects
     debug_ids = ['pp140']
 
-    # 
     for kinematics in KINEMATICS:
         # file name is based on task names and tracking systems defined above
         for sub_id in pd_sub_ids + matched_control_sub_ids:
@@ -106,15 +105,16 @@ def main() -> None:
                                 continue                    
 
 
-                            # Fill the gaps and filter the data (filter function available in kinetics toolkit)
-                            interpolated_data = interpolate.fill_gaps(reduced_data, sub_id, task_name, fc=6, threshold=271) # fc = cut-off for the butterworth filter; threshold = maximum allowed data gap
+                            # Fill the gaps and filter the data (filter function available in kinetics toolkit) for omc data
+                            if tracksys =='omc':
+                                interpolated_data = interpolate.fill_gaps(reduced_data, sub_id, task_name, fc=6, threshold=271) # fc = cut-off for the butterworth filter; threshold = maximum allowed data gap
 
-                            # Principal component analysis (to align the x axis with walking direction)
-                            rotated_data = align.rotate_data(interpolated_data, sub_id, task_name)
+                                # Principal component analysis (to align the x axis with walking direction)
+                                rotated_data = align.rotate_data(interpolated_data, sub_id, task_name)
 
-                            # returns None when rotated_data is completely missing one of the pelvic markers (PCA is based on pelvic coordinate system)
-                            if rotated_data is None:
-                                continue        
+                                # returns None when rotated_data is completely missing one of the pelvic markers (PCA is based on pelvic coordinate system)
+                                if rotated_data is None:
+                                    continue        
                             
                             if kinematics == 'pos':
                                 data = rotated_data
@@ -125,9 +125,18 @@ def main() -> None:
 
                             # Calculate kinectomes (for each gait cycle) and save in derived_data/kinectome
                             # can be done only once for each derivative (position, velocity, acceleration etc.) and then commented out to save on running time
-                            kinectomes = kinectome.calculate_kinectome(data, sub_id, task_name, run, tracksys, kinematics, BASE_PATH)
+                            if sub_id in all_control_sub_ids:
+                                run = None
+
+                            # kinectomes = kinectome.calculate_kinectome(data, sub_id, task_name, run, tracksys, kinematics, BASE_PATH)
                     
                             # Modularity analysis
+
+                            modularity_results = modularity.modularity_analysis(BASE_PATH, sub_id, task_name, tracksys, run, kinematics)
+
+                            # Fingerprint analysis
+
+                            # Topological analysis
 
                         else:
                             print(f"No matching file found for sub-{sub_id}, task-{task_name}, tracksys-{tracksys}, run-{run}")
