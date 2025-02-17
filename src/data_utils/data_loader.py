@@ -1,6 +1,8 @@
 import pandas as pd
 from pathlib import Path
 import os
+import re
+import numpy as np
 
 
 def load_file(file_path: str | Path) -> pd.DataFrame:
@@ -53,3 +55,27 @@ def load_events(base_path, sub_id, task_name, run):
     events = load_file(event_files[0])
 
     return events
+
+def load_kinectomes(base_path, sub_id, task_name, tracksys, run, kinematics):
+    """Loads kinectome files and sorts them by onset indices."""
+    os.chdir(f'{base_path}/derived_data/sub-{sub_id}/kinectomes')
+    file_list = os.listdir()
+    
+    # run 'on' or 'off' only exists in the file names of pwPD 
+    if run:
+        relevant_files = [file for file in file_list if all(x in file for x in [task_name, tracksys, run, kinematics])]
+    else:
+        relevant_files = [file for file in file_list if all(x in file for x in [task_name, tracksys, kinematics])]
+    
+    sorted_files = sorted(relevant_files, key=lambda file: extract_onset_indices(file)[0])
+    
+    return [np.load(file) for file in sorted_files]
+
+def extract_onset_indices(filename):
+    """Extract numerical onset indices from the kinectome filename."""
+
+    match = re.search(r'kinct(\d+)-(\d+)', filename)
+    if match:
+        return int(match.group(1)), int(match.group(2))
+    
+    return None, None
