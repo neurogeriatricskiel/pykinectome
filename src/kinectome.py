@@ -78,7 +78,7 @@ def segment_data(data: pd.DataFrame, cycle_indices: tuple):
     return cycle_data
     
 
-def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: str, tracksys: str, kinematics: str, base_path):
+def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: str, tracksys: str, kinematics: str, base_path, marker_list):
     """
     Computes Pearson correlation matrices for marker positions in x, y, and z coordinates across gait cycles 
     and saves them as .npy files.
@@ -105,14 +105,30 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
 
         # Extract marker names
         marker_names = sorted(set(col[:-6] for col in gait_cycle_data.columns if col.endswith(f'{kinematics.upper()}_x')))
-        
+
+        # Check for missing markers
+        missing_markers = [m for m in marker_list if m not in marker_names]
+        if missing_markers:
+            print(f"Missing markers for Subject: {sub_id}, Task: {task_name}, Missing: {missing_markers}")
+
+        # Reorder columns based on MARKER_LIST
+        ordered_columns = []
+        for marker in marker_list:
+            if marker in marker_names:
+                ordered_columns.extend([f"{marker}_{kinematics.upper()}_x", 
+                                        f"{marker}_{kinematics.upper()}_y", 
+                                        f"{marker}_{kinematics.upper()}_z"])
+
+        # Subset and reorder dataframe
+        gait_cycle_data = gait_cycle_data[ordered_columns]
+
         # Initialize correlation matrices
         num_markers = len(marker_names)
         correlation_matrices = np.zeros((num_markers, num_markers, 3))
 
         # Compute correlation for each coordinate (x, y, z)
         for i, coord in enumerate([f'_{kinematics.upper()}_x', f'_{kinematics.upper()}_y', f'_{kinematics.upper()}_z']):
-            markers = [m + coord for m in marker_names]
+            markers = [m + coord for m in marker_list]
             correlation_matrices[:, :, i] = gait_cycle_data[markers].corr(method='pearson', min_periods=1)
      
         # directory to save 
@@ -130,22 +146,37 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
         
         file_path = os.path.join(kinectome_path, file_name)
 
+        visualise_kinectome(correlation_matrices, 'test_plot_kinectome4.png', marker_list, sub_id, task_name, kinematics)
+        
         # Save kinectomes (as numpy array)
-        np.save(file_path, correlation_matrices)        
+        np.save(file_path, correlation_matrices)   
+        
 
-def visualise_kinectome(kinectome, figname):
+def visualise_kinectome(kinectome, figname, marker_list, sub_id, task_name, kinematics):
     """
-    plots the kinectomes in AP, ML and V directions (does not contain marker names)
-    for visualisation pusposes only
+    Plots the kinectomes in AP, ML, and V directions with marker names as labels.
     """
+
+    # Split left and right markers
+    left_markers = [m for m in marker_list if m.startswith('l_')]
+    right_markers = [m for m in marker_list if m.startswith('r_')]
+
+    # Combine them in the desired order (left-side first, then right-side)
+    ordered_marker_list = left_markers + right_markers
 
     plt.figure(figsize=(15, 5))
-    for i, matrix in enumerate(kinectome.transpose(2, 0, 1)):  # Iterate over 3 matrices
-        plt.subplot(1, 3, i + 1)  # Create subplot
-        sns.heatmap(matrix, cmap="coolwarm", vmin=-1, vmax=1, square=True, cbar=True)
-        plt.title(f"Correlation Matrix {['Anteroposterior', 'Mediolateral', 'Vertical'][i]}")
+    # Reorder the kinectome numpy array accordingly
+    marker_indices = [marker_list.index(m) for m in ordered_marker_list]
+    reordered_kinectome = kinectome[np.ix_(marker_indices, marker_indices, [0, 1, 2])]
 
-    # matplotlib crashing when running interactively, therefore save the figure (adjust the figure name) to see it    
+    for i, matrix in enumerate(reordered_kinectome.transpose(2, 0, 1)):  # Iterate over 3 matrices
+        plt.subplot(1, 3, i + 1)  # Create subplot
+        sns.heatmap(matrix, cmap="coolwarm", vmin=-1, vmax=1, square=True, cbar=True,
+                    xticklabels=ordered_marker_list, yticklabels=ordered_marker_list)  # Add labels
+        
+        plt.title(f"Correlation Matrix {['Anteroposterior', 'Mediolateral', 'Vertical'][i]}")
+    
+    plt.suptitle(f'{kinematics.upper()} kinectomes of {sub_id} during {task_name}')
     os.chdir('C:/Users/Karolina/Desktop/pykinectome/pykinectome/src/preprocessing')
     plt.tight_layout()  # Adjust layout to prevent overlap
-    plt.savefig(figname, dpi=600) # 
+    plt.savefig(figname, dpi=600)
