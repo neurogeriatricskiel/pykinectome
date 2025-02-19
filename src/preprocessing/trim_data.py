@@ -62,8 +62,11 @@ def startStop(data: pd.DataFrame, sub_id: str, task_name: str, run: str) -> pd.D
 import pandas as pd
 
 def reduce_dimensions_clusters(data: pd.DataFrame, sub_id: str, task_name: str) -> pd.DataFrame:
-    """ 4-marker clusters are calculated into one midpoint,  
+    """ 4-marker clusters of thighs and shanks are calculated into one midpoint,  
     3 sternum markers calculated into one,
+    4 head markers into one midpoint,
+    2 wrist markers into one midpoint
+    
     """
 
     try:
@@ -91,19 +94,26 @@ def reduce_dimensions_clusters(data: pd.DataFrame, sub_id: str, task_name: str) 
         data.loc[:, 'ster_POS_y'] = data.filter(regex=r'm_ster\d+_POS_y').mean(axis=1)
         data.loc[:, 'ster_POS_z'] = data.filter(regex=r'm_ster\d+_POS_z').mean(axis=1)
 
-        # data.loc[:, 'l_head_POS_x'] = data[['lf_hd_POS_x', 'lb_hd_POS_x']].mean(axis=1)
-        # data.loc[:, 'l_head_POS_y'] = data[['lf_hd_POS_y', 'lb_hd_POS_y']].mean(axis=1)
-        # data.loc[:, 'l_head_POS_z'] = data[['lf_hd_POS_z', 'lb_hd_POS_z']].mean(axis=1)
+        data.loc[:, 'head_POS_x'] = data.filter(regex=r'^[lr][bf]_hd_POS_x$').mean(axis=1)
+        data.loc[:, 'head_POS_y'] = data.filter(regex=r'^[lr][bf]_hd_POS_y$').mean(axis=1)
+        data.loc[:, 'head_POS_z'] = data.filter(regex=r'^[lr][bf]_hd_POS_z$').mean(axis=1)
 
-        # data.loc[:, 'r_head_POS_x'] = data[['rf_hd_POS_x', 'rb_hd_POS_x']].mean(axis=1)
-        # data.loc[:, 'r_head_POS_y'] = data[['rf_hd_POS_y', 'rb_hd_POS_y']].mean(axis=1)
-        # data.loc[:, 'r_head_POS_z'] = data[['rf_hd_POS_z', 'rb_hd_POS_z']].mean(axis=1)
+        data.loc[:, 'l_wrist_POS_x'] = data[['l_wrr_POS_x', 'l_wru_POS_x']].mean(axis=1)
+        data.loc[:, 'l_wrist_POS_y'] = data[['l_wrr_POS_y', 'l_wru_POS_y']].mean(axis=1)
+        data.loc[:, 'l_wrist_POS_z'] = data[['l_wrr_POS_z', 'l_wru_POS_z']].mean(axis=1)
+
+        data.loc[:, 'r_wrist_POS_x'] = data[['r_wrr_POS_x', 'r_wru_POS_x']].mean(axis=1)
+        data.loc[:, 'r_wrist_POS_y'] = data[['r_wrr_POS_y', 'r_wru_POS_y']].mean(axis=1)
+        data.loc[:, 'r_wrist_POS_z'] = data[['r_wrr_POS_z', 'r_wru_POS_z']].mean(axis=1)
+
 
         # Drop original columns
         data = data.drop(columns=data.filter(regex=r'(l_th|r_th|l_sk|r_sk)\d+_POS_(x|y|z)').columns)
-        # data = data.drop(columns=data.filter(regex='_hd_POS_[xyz]').columns)        
+        data = data.drop(columns=data.filter(regex=r'[lr][bf]_hd_POS_[xyz]$').columns)   
         data = data.drop(columns=data.filter(regex=r'(m_ster)\d+_POS_(x|y|z)').columns)
         data = data.drop(columns=data.filter(regex='_err').columns)
+        data = data.drop(columns=data.filter(regex=r'_(wrr|wru)(?!st)').columns)
+
 
         return data
 
