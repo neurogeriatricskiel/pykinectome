@@ -110,6 +110,7 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
         missing_markers = [m for m in marker_list if m not in marker_names]
         if missing_markers:
             print(f"Missing markers for Subject: {sub_id}, Task: {task_name}, Missing: {missing_markers}")
+            continue
 
         # Reorder columns based on MARKER_LIST
         ordered_columns = []
@@ -146,7 +147,7 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
         
         file_path = os.path.join(kinectome_path, file_name)
 
-        visualise_kinectome(correlation_matrices, 'test_plot_kinectome4.png', marker_list, sub_id, task_name, kinematics)
+        # visualise_kinectome(correlation_matrices, 'test_plot_kinectome4.png', marker_list, sub_id, task_name, kinematics)
         
         # Save kinectomes (as numpy array)
         np.save(file_path, correlation_matrices)   
