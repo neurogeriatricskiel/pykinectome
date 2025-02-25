@@ -72,7 +72,9 @@ def load_kinectomes(base_path, sub_id, task_name, tracksys, run, kinematics):
     return [np.load(file) for file in sorted_files]
 
 def extract_onset_indices(filename):
-    """Extract numerical onset indices from the kinectome filename."""
+    """Extract numerical onset indices from the kinectome filename.
+    Part of load_kinectome function. 
+    """
 
     match = re.search(r'kinct(\d+)-(\d+)', filename)
     if match:
