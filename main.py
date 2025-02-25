@@ -3,8 +3,8 @@ from src.preprocessing.filter import (
     butter_lowpass_filter
 )
 # from src.kinectome import calculate_crl_mtrx
-from src.preprocessing import interpolate, align, filter, trim_data, differentiation
-from src import kinectome, modularity
+from src.preprocessing import preprocessing
+from src import kinectome, modularity, fingerprint
 from pathlib import Path
 import sys
 import pandas as pd
@@ -29,18 +29,27 @@ elif sys.platform == "win32":
     )
 
 TASK_NAMES = [
-    "walkPreferred", "walkFast", "walkSlow"
+    "walkFast", "walkSlow", "walkPreferred" 
 ]
 TRACKING_SYSTEMS = [
     "omc"
 ] # add "imu" if needed
 RUN = [
-    'on'
+    'on', 'off'
         ] # add 'off' if needed 
 KINEMATICS = [
-       'acc', 'vel', 'pos'
+       'vel', 'pos', 'acc'
                 ] # for calculating kinectomes using position, velocity and acceleration data (what about jerk?)
 FS = 200 # sampling rate 
+
+# ordered list of markers
+MARKER_LIST = ['head', 'ster', 'l_sho', 'r_sho',  
+                'l_elbl', 'r_elbl','l_wrist', 'r_wrist', 'l_hand', 'r_hand', 
+                'l_asis', 'l_psis', 'r_asis', 'r_psis', 
+                'l_th', 'r_th', 'l_sk', 'r_sk', 
+                'l_ank', 'r_ank', 'l_toe', 'r_toe']
+
+PD_ON = ['pp065'] # a list of sub_ids of PD that were measured in on condition
 
 def main() -> None:
     demographics_df = pd.read_excel(
@@ -53,95 +62,69 @@ def main() -> None:
     matched_control_sub_ids = select_subjects.make_control_group(demographics_df, control_ids=all_control_sub_ids, treatment_ids=pd_sub_ids)
     
     # use for debugging particular subjects
-    debug_ids = ['pp140']
+    debug_ids = ['pp021']
 
-    for kinematics in KINEMATICS:
-        # file name is based on task names and tracking systems defined above
-        for sub_id in pd_sub_ids + matched_control_sub_ids:
-        # for sub_id in debug_ids: # use this line for inspecting single subjects with known IDs
+    # file name is based on task names and tracking systems defined above
+    for sub_id in pd_sub_ids + matched_control_sub_ids:
+    # for sub_id in debug_ids:
+        for kinematics in KINEMATICS:
+            # for sub_id in debug_ids: # use this line for inspecting single subjects with known IDs
             for task_name in TASK_NAMES:
                 for tracksys in TRACKING_SYSTEMS:
                     for run in RUN:
-                        
-                        # change current working directory to the folder with motion data
-                        os.chdir(f'{RAW_DATA_PATH}\\sub-{sub_id}\\motion')
-                        file_list = os.listdir()
-
-                        file_path = None  # Initialize file_path for each loop
-
-                        for file in file_list:
-                            if sub_id in file and task_name in file and tracksys in file and 'motion' in file:
-                                # Check if the 'run' condition matches 
-                                if any(f"run-{r}" in file for r in RUN):
-                                    file_path = f"{RAW_DATA_PATH}\\sub-{sub_id}\\motion\\{file}"
-                                    break # Exit the loop once a matching file is found
-
-                                # Include files without any 'run-on' or 'run-off' condition (run-on and run-off are only applicable to PD)
-                                elif not any(f"run-{cond}" in file for cond in ["on", "off"]):
-                                    file_path = f"{RAW_DATA_PATH}\\sub-{sub_id}\\motion\\{file}"
-                                    break
-                                
-                        if file_path:
-                            # Load the data as a pandas dataframe
-                            data = data_loader.load_file(file_path=file_path)
-
-                            # trim the data to be between the start and finish lines (5m walk)
-                            trimmed_data = trim_data.startStop(data, sub_id, task_name, run)
-
-                            # if events file not found, start or stop event onset is missing or onsets do not match the data length
-                            if trimmed_data is None:
-                                continue
-                            elif trimmed_data.empty:        
-                                print(f'Dataframe of subject {sub_id} during task {task_name} is empty. Check the event file')
-                                continue # exit the function
-
-                            # recalculate the positions of clusters (always at fixed distance between one another)
-                            # full_cluster_data = interpolate.recacl_clusters(trimmed_data, sub_id, task_name)
-
-                            # reduce the data dimensions (cluster markers calculated into one point)
-                            reduced_data = trim_data.reduce_dimensions_clusters(trimmed_data, sub_id, task_name)
-
-                            if reduced_data is None:
-                                continue                    
-
-
-                            # Fill the gaps and filter the data (filter function available in kinetics toolkit) for omc data
-                            if tracksys =='omc':
-                                interpolated_data = interpolate.fill_gaps(reduced_data, sub_id, task_name, fc=6, threshold=271) # fc = cut-off for the butterworth filter; threshold = maximum allowed data gap
-
-                                # Principal component analysis (to align the x axis with walking direction)
-                                rotated_data = align.rotate_data(interpolated_data, sub_id, task_name)
-
-                                # returns None when rotated_data is completely missing one of the pelvic markers (PCA is based on pelvic coordinate system)
-                                if rotated_data is None:
-                                    continue        
-                            
-                            if kinematics == 'pos':
-                                data = rotated_data
-                            elif kinematics == 'vel':
-                                data = differentiation.velocity(rotated_data, FS)
-                            elif kinematics == 'acc':
-                                data = differentiation.acceleration(rotated_data, FS)
-
-                            # Calculate kinectomes (for each gait cycle) and save in derived_data/kinectome
-                            # can be done only once for each derivative (position, velocity, acceleration etc.) and then commented out to save on running time
-                            if sub_id in all_control_sub_ids:
-                                run = None
-
-                            # kinectomes = kinectome.calculate_kinectome(data, sub_id, task_name, run, tracksys, kinematics, BASE_PATH)
-                    
-                            # Modularity analysis
-
-                            modularity_results = modularity.modularity_analysis(BASE_PATH, sub_id, task_name, tracksys, run, kinematics)
-
-                            # Fingerprint analysis
-
-                            # Topological analysis
-
+                        if sub_id in PD_ON: # those sub ids which are measured in 'on' condition but there is no 'run-on' in the filename
+                            run = 'on'
                         else:
-                            print(f"No matching file found for sub-{sub_id}, task-{task_name}, tracksys-{tracksys}, run-{run}")
+                            run = run
+                           
+                            # change current working directory to the folder with motion data
+                            os.chdir(f'{RAW_DATA_PATH}\\sub-{sub_id}\\motion')
+                            file_list = os.listdir()
 
+                            file_path = None  # Initialize file_path for each loop
+
+                            for file in file_list:
+                                if sub_id in file and task_name in file and tracksys in file and 'motion' in file:
+                                    # Check if the 'run' condition matches 
+                                    if any(f"run-{r}" in file for r in RUN):
+                                        file_path = f"{RAW_DATA_PATH}\\sub-{sub_id}\\motion\\{file}"
+                                        break # Exit the loop once a matching file is found
+
+                                    # Include files without any 'run-on' or 'run-off' condition (run-on and run-off are only applicable to PD)
+                                    elif not any(f"run-{cond}" in file for cond in ["on", "off"]):
+                                        file_path = f"{RAW_DATA_PATH}\\sub-{sub_id}\\motion\\{file}"
+                                        break
+                                    
+                            if file_path:
+                                # Load the data as a pandas dataframe
+                                data = data_loader.load_file(file_path=file_path)
+
+                                # trim, reduce dimensions, interpolate, rotate, differentiate
+                                preprocessed_data = preprocessing.all_preprocessing(data, sub_id, task_name, run, tracksys, kinematics, FS)
+
+                                if preprocessed_data is None:
+                                    continue                                
+
+                                # Calculate kinectomes (for each gait cycle) and save in derived_data/kinectomes
+                                # can be done only once for each derivative (position, velocity, acceleration etc.) and then commented out to save on running time
+                                if sub_id in all_control_sub_ids: # pwPD that were measured on medication and have no 'run' in the filename
+                                    run = None
+                                # when save=True, then saves the kinectome as .npy files and returns the marker labels for that kinectome. when save=False, only returns the marker labels
+                                kinectome.calculate_kinectome(preprocessed_data, sub_id, task_name, run, tracksys, kinematics, BASE_PATH, MARKER_LIST)
+                        
+                            else:
+                                print(f"No matching motion file found for sub-{sub_id}, task-{task_name}, tracksys-{tracksys}, run-{run}")
     return
+
+
+
+def modularity(sub_id, task_name, tracksys, run, kinematics, MARKER_LIST):
+# Modularity analysis
+    modularity_results = modularity.modularity_analysis(BASE_PATH, sub_id, task_name, tracksys, run, kinematics, MARKER_LIST)
+    return
+
+
+
 
 
 if __name__ == "__main__":
