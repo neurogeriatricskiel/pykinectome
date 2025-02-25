@@ -36,7 +36,7 @@ def startStop(data: pd.DataFrame, sub_id: str, task_name: str, run: str) -> pd.D
         event_files = [file for file in event_files if not any(f"run-{r}" in file for r in ['on', 'off']) and '.tsv' in file]
     
     if not event_files:
-        print(f"Warning: No events file found for subject {sub_id}, task {task_name}. Skipping...")
+        print(f"Warning: No events file found for subject {sub_id}, task {task_name} during run-{run}. Skipping...")
         return None  # Return None instead of raising an error
 
     
@@ -113,6 +113,9 @@ def reduce_dimensions_clusters(data: pd.DataFrame, sub_id: str, task_name: str) 
         data = data.drop(columns=data.filter(regex=r'(m_ster)\d+_POS_(x|y|z)').columns)
         data = data.drop(columns=data.filter(regex='_err').columns)
         data = data.drop(columns=data.filter(regex=r'_(wrr|wru)(?!st)').columns)
+        data = data.drop(columns=data.filter(regex=r'_ua_POS_[xyz]$'))
+        data = data.drop(columns=data.filter(regex=r'_frm_POS_[xyz]$'))
+        data = data.drop(columns=data.filter(regex=r'_heel_POS_[xyz]$'))
 
 
         return data
@@ -135,3 +138,53 @@ def reduce_dimensions_hip(data: pd.DataFrame):
         data = data.drop(columns=data.filter(regex='sis_POS_[xyz]').columns)
 
         return data
+
+def remove_long_nans(data: pd.DataFrame, sub_id, task_name, run, nan_threshold=300):
+    """
+    Removes long NaN streaks (> nan_threshold) from the start or end of the dataframe.
+    If long NaN streaks are in the middle, it ensures that full gait cycles are preserved.
+
+    Args:
+        data (pd.DataFrame): Motion tracking data with NaNs.
+        nan_threshold (int): The minimum NaN streak length to be considered for removal.
+
+    Returns:
+        trimmed_data (pd.DataFrame): Data after trimming long NaN streaks.
+        index_shift (int): The amount by which the indices were shifted.
+    """
+    
+    max_nan_streak = 0
+    streak_idx = None 
+
+    for col in data.columns:
+        # Convert NaN to 1, non-NaN to 0
+        is_nan = data[col].isna().astype(int)
+        
+        # Create groups of consecutive NaN values
+        streak_groups = (is_nan != is_nan.shift()).cumsum()
+        
+        # Calculate streak lengths for each group
+        streak_lengths = is_nan.groupby(streak_groups).cumsum()
+        
+        # Find the maximum streak in this column
+        max_streak = streak_lengths.max()
+
+        if max_streak is None or max_nan_streak == 0:
+            return data, None
+        
+        elif max_streak > max_nan_streak:            
+            max_nan_streak = max_streak
+            nan_col = col
+            
+            # Find the group with the longest streak
+            max_group = streak_groups[streak_lengths == max_streak].iloc[0]
+            # Get indices where this group starts and ends        
+            streak_idx = (streak_lengths[streak_groups == max_group].index[0], streak_lengths[streak_groups == max_group].index[-1])
+   
+    if streak_idx[1] - streak_idx[0] > 400:
+        print(f'{sub_id} has {streak_idx[1] - streak_idx[0]} NaNs in {nan_col} during {task_name}')
+    
+    # cut the data leaving the NaNs out
+
+    ## how to cut the data so 
+    return data, streak_idx
