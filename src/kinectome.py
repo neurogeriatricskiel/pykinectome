@@ -1,11 +1,13 @@
 import os
-from src.data_utils import data_loader
+from src.data_utils import data_loader, groups
+from src.preprocessing.preprocessing import all_preprocessing
 import pandas as pd
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')  # Use a non-interactive backend
 import matplotlib.pyplot as plt
 import seaborn as sns
+
 
 def find_gait_cycles(base_path, data: pd.DataFrame, sub_id: str, task_name: str, run: str):
     """
@@ -185,3 +187,96 @@ def visualise_kinectome(kinectome, figname, marker_list, sub_id, task_name, kine
     os.chdir('C:/Users/Karolina/Desktop/pykinectome/pykinectome/src/preprocessing')
     plt.tight_layout()  # Adjust layout to prevent overlap
     plt.savefig(figname, dpi=600)
+
+
+def calculate_all_kinectomes(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, raw_data_path, fs, base_path, marker_list) -> None:
+    """
+    Calculates kinectomes for all subejcts. 
+
+    This function iterates over a predefined list of subjects, tasks, tracking systems, and kinematic data types 
+    to locate, load, preprocess, and analyze motion data files. Preprocessed data is then used to compute kinectomes.
+
+    Workflow:
+        1. Make the disease (based on diagnosis variable) and matched control groups.
+        2. Iterate through subjects, tasks, kinematics, and tracking systems to locate relevant motion files.
+        3. Load motion tracking data from files.
+        4. Preprocess data (trimming, dimension reduction, interpolation, rotation, differentiation).
+        5. Compute kinectomes for each gait cycle and save them as `.npy` files.
+
+    Special Handling:
+        - Subjects measured in the "on" medication condition may have filenames without explicit "run-on".
+        - Control subjects (matched controls) do not have medication conditions and are processed with `run=None`.
+
+    Global Variables Used:
+        - `diagnosid` (list): Specifies the disease of interest.
+        - `kinematics_list` (list): Types of kinematic data (e.g., position, velocity, acceleration).
+        - `task_names` (list): Motion task names.
+        - `tracking_systems` (list): Motion tracking systems used.
+        - `runs` (list): Run conditions (e.g., "on", "off") for pwPD.
+        - `raw_data_path` (str): Path to the raw motion data files.
+        - `base_path` (str): Path to save computed kinectomes.
+        - `fs` (float): Sampling frequency of motion data.
+        - `marker_list` (list): List of markers used in motion tracking.
+
+    Returns:
+        None
+
+    """
+    disease_sub_ids, matched_control_sub_ids = groups.define_groups(diagnosis)
+    
+    
+    # use for debugging particular subjects
+    # debug_ids = ['pp032']
+
+    # file name is based on task names and tracking systems defined in the global variables
+    for sub_id in disease_sub_ids + matched_control_sub_ids:
+    # for sub_id in debug_ids:
+        for kinematics in kinematics_list:
+            # for sub_id in debug_ids: # use this line for inspecting single subjects with known IDs
+            for task_name in task_names:
+                for tracksys in tracking_systems:
+                    for run in runs:
+                        if sub_id in pd_on: # those sub ids which are measured in 'on' condition but there is no 'run-on' in the filename
+                            run = 'on'
+                        else:
+                            run = run
+                           
+                        # change current working directory to the folder with motion data
+                        os.chdir(f'{raw_data_path}\\sub-{sub_id}\\motion')
+                        file_list = os.listdir()
+
+                        file_path = None  # Initialize file_path for each loop
+
+                        for file in file_list:
+                            if sub_id in file and task_name in file and tracksys in file and 'motion' in file:
+                                # Check if the 'run' condition matches 
+                                if any(f"run-{r}" in file for r in run):
+                                    file_path = f"{raw_data_path}\\sub-{sub_id}\\motion\\{file}"
+                                    break # Exit the loop once a matching file is found
+
+                                # Include files without any 'run-on' or 'run-off' condition (run-on and run-off are only applicable to PD)
+                                elif not any(f"run-{cond}" in file for cond in ["on", "off"]):
+                                    file_path = f"{raw_data_path}\\sub-{sub_id}\\motion\\{file}"
+                                    break
+                                
+                        if file_path:
+                            # Load the data as a pandas dataframe
+                            data = data_loader.load_file(file_path=file_path)
+
+                            # trim, reduce dimensions, interpolate, rotate, differentiate
+                            preprocessed_data = all_preprocessing(data, sub_id, task_name, run, tracksys, kinematics, fs)
+
+                            if preprocessed_data is None:
+                                continue                                
+
+                            # Calculate kinectomes (for each gait cycle) and save in derived_data/kinectomes
+                            # can be done only once for each derivative (position, velocity, acceleration etc.) and then commented out to save on running time
+                            if sub_id in matched_control_sub_ids: # pwPD that were measured on medication and have no 'run' in the filename
+                                run = None
+                            
+                            # calculates the kinectomes in AP, ML and V directions and saves as .npy files
+                            calculate_kinectome(preprocessed_data, sub_id, task_name, run, tracksys, kinematics, base_path, marker_list)
+                    
+                        else:
+                            print(f"No matching motion file found for sub-{sub_id}, task-{task_name}, tracksys-{tracksys}, run-{run}")
+    return
