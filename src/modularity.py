@@ -5,17 +5,10 @@ import os
 import numpy as np
 import networkx as nx
 from src.data_utils.data_loader import load_kinectomes
-
-
-# def get_gait_cycle_label(onset, events):
-#     """Determine if the onset corresponds to a left or right gait cycle."""
-
-#     for i in range(len(events) - 1):
-#         if events.iloc[i]['onset'] <= onset < events.iloc[i + 1]['onset']:
-#             return 'left' if 'left' in events.iloc[i]['event_type'] else 'right'
-        
-#     return 'unknown'
-
+from src.data_utils import groups
+import seaborn as sns
+import csv
+import pickle
 
 def build_graph(kinectome, marker_list):
     """Builds weighted graphs for AP, ML, V directions while preserving meaningful negative correlations."""
@@ -50,23 +43,6 @@ def run_louvain(G, num_iterations=100):
 
     return partitions
 
-# def compute_allegiance_matrix(partitions, num_nodes):
-#     """Constructs an allegiance matrix from Louvain community partitions."""
-#     allegiance_matrix = np.zeros((num_nodes, num_nodes))
-
-#     for partition in partitions:
-#         node_to_community = {}
-#         for comm_idx, community in enumerate(partition):
-#             for node in community:
-#                 node_to_community[node] = comm_idx  # Map each node to its community index
-
-#         for i in range(num_nodes):
-#             for j in range(num_nodes):
-#                 if node_to_community.get(i) == node_to_community.get(j):  # Check community membership
-#                     allegiance_matrix[i, j] += 1
-
-#     allegiance_matrix /= len(partitions)  # Normalize by number of iterations
-#     return allegiance_matrix
 
 def compute_allegiance_matrix(partitions, marker_list, num_nodes):
     """Constructs an allegiance matrix from Louvain community partitions."""
@@ -99,7 +75,7 @@ def draw_graph_with_weights(G):
     plt.savefig('test_plot_graph.png', dpi=600)
 
 
-def modularity_analysis(base_path, sub_id, task_name, tracksys, run, kinematics, marker_list):
+def modularity_analysis(kinectomes, marker_list):
     """Main function for modularity analysis across gait cycles and speeds.
     
     note:
@@ -112,7 +88,7 @@ def modularity_analysis(base_path, sub_id, task_name, tracksys, run, kinematics,
     
     
     """
-    kinectomes = load_kinectomes(base_path, sub_id, task_name, tracksys, run, kinematics)
+    # kinectomes = load_kinectomes(base_path, sub_id, task_name, tracksys, run, kinematics)
     all_allegiance_matrices = {"AP": [], "ML": [], "V": []}
     
     for kinectome in kinectomes:
@@ -121,9 +97,145 @@ def modularity_analysis(base_path, sub_id, task_name, tracksys, run, kinematics,
             G = graphs[idx]
             partitions = run_louvain(G, num_iterations=100)
             allegiance_matrix = compute_allegiance_matrix(partitions, marker_list, num_nodes=G.number_of_nodes())
-            all_allegiance_matrices[direction].append(allegiance_matrix)
+            all_allegiance_matrices[direction].append(np.array(allegiance_matrix))
             
             # Visualize one of the graphs (for debugging purposes)
             # draw_graph_with_weights(G)
     
     return all_allegiance_matrices
+
+def modularity_main(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, raw_data_path, base_path, marker_list, visualise):
+    disease_sub_ids, matched_control_sub_ids = groups.define_groups(diagnosis)
+
+    # Store variability scores structured per subject, task, and direction
+    variability_scores = {
+        f"{diagnosis[0][10:].capitalize()}": {sub_id: {task: {"AP": None, "ML": None, "V": None} for task in task_names} for sub_id in disease_sub_ids},
+        "Control": {sub_id: {task: {"AP": None, "ML": None, "V": None} for task in task_names} for sub_id in matched_control_sub_ids},
+    }
+
+    debug_ids = ['pp006', 'pp008']
+
+    for kinematics in kinematics_list:
+        for sub_id in disease_sub_ids + matched_control_sub_ids:
+            group = f"{diagnosis[0][10:].capitalize()}" if sub_id in disease_sub_ids else "Control"
+        
+        # for sub_id in debug_ids:
+        #     group = f"{diagnosis[0][10:].capitalize()}" if sub_id in disease_sub_ids else "Control"
+            
+            for tracksys in tracking_systems:
+                for task_name in task_names:
+                    for run in runs:
+                        if sub_id in pd_on: # those sub ids which are measured in 'on' condition but there is no 'run-on' in the filename
+                            run = 'on'
+                        elif sub_id not in disease_sub_ids:
+                            run = None
+                        else:
+                            run = run
+                        
+                        kinectomes = load_kinectomes(base_path, sub_id, task_name, tracksys, run, kinematics)
+
+                        if kinectomes is None:
+                            continue
+
+                        allegiance_matrices = modularity_analysis(kinectomes, marker_list)
+                        
+                        avg_sub_allegiance_matrices = {}
+                        std_sub_allegiance_matrices = {}
+
+                        for direction in allegiance_matrices.keys():
+
+                            # compute average allegiance matrix for one subject
+                            avg_sub_allegiance_matrices[direction] = np.mean(allegiance_matrices[direction], axis=0)
+
+                            # calculate variability (as std) of allegiance matrices 
+                            # the resulting varibility matrix shows which body segments consistently belong to the same community (low std) and which fluctuate more (high std)
+                            std_sub_allegiance_matrices[direction] = np.std(allegiance_matrices[direction], axis=0)
+                            
+                            # Store mean variability per direction (single score)
+                            variability_scores[group][sub_id][task_name][direction] = round(np.mean(std_sub_allegiance_matrices[direction]), 2)
+                            
+                            if visualise:
+                                visualise_allegiance_matrix(avg_sub_allegiance_matrices[direction], marker_list, sub_id, task_name, direction,
+                                                            figname=f'allegiance_matrix_{sub_id}_{task_name}_{direction}.png')
+                                visualise_allegiance_matrix(std_sub_allegiance_matrices[direction], marker_list, sub_id, task_name, direction,
+                                                            figname=f'std_allegiance_matrix_{sub_id}_{task_name}_{direction}.png')
+                            
+
+        save_variability_to_csv(variability_scores, kinematics)
+
+
+    return None
+
+def visualise_allegiance_matrix(allegiance_matrix, marker_list, sub_id, task_name, direction, figname):
+    # Define marker ordering
+    left_markers = [m for m in marker_list if m.startswith('l_')]
+    right_markers = [m for m in marker_list if m.startswith('r_')]
+    middle_markers = ['head', 'ster']
+    ordered_marker_list = middle_markers + left_markers + right_markers
+    
+    # Get new indices based on the ordered list
+    index_map = {marker: i for i, marker in enumerate(marker_list)}
+    new_order = [index_map[m] for m in ordered_marker_list]
+
+    # Reorder rows and columns
+    reordered_matrix = allegiance_matrix[np.ix_(new_order, new_order)]
+    
+    # visualise
+    plt.figure(figsize=(14, 11))
+    sns.heatmap(reordered_matrix, cmap="coolwarm", xticklabels=ordered_marker_list, yticklabels=ordered_marker_list)  
+    plt.title(f"Allegiance Matrix of {sub_id} during {task_name} in {direction} direction")
+    os.chdir('C:/Users/Karolina/Desktop/pykinectome/pykinectome/src/preprocessing')
+    plt.tight_layout()  # Adjust layout to prevent overlap
+    plt.savefig(figname, dpi=600)
+
+
+def save_variability_to_csv(variability_scores, kinematics):
+    """
+    Saves variability scores to a CSV file.
+
+    Parameters:
+    - variability_scores (dict): Dictionary with variability scores structured as:
+        variability_scores[group][sub_id][task_name][direction]
+    - kinematics (str): The kinematics type (e.g., 'position', 'velocity', 'acceleration').
+    - output_dir (str): Directory where CSV files will be saved.
+    """
+    os.chdir('C:\\Users\\Karolina\\Desktop\\pykinectome\\results')
+    # with open('variability_scores_velocity.pickle', 'rb') as handle:
+    #     variability_scores = pickle.load(handle)
+    output_dir = 'C:\\Users\\Karolina\\Desktop\\pykinectome\\results'
+    
+    # Ensure the output directory exists
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Define the output file name
+    output_file = os.path.join(output_dir, f"variability_{kinematics}.csv")
+
+    # Define CSV column names
+    columns = ["group", "subject_id", 
+               "pref_AP", "pref_ML", "pref_V",
+               "fast_AP", "fast_ML", "fast_V",
+               "slow_AP", "slow_ML", "slow_V"]
+
+    # Open the CSV file for writing
+    with open(output_file, mode="w", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerow(columns)  # Write header
+
+        # Iterate through groups (PD and Control)
+        for group, subjects in variability_scores.items():
+            for sub_id, tasks in subjects.items():
+                # Extract variability scores or set to None if missing
+                row = [
+                    group,
+                    sub_id,
+                    tasks.get("walkPreferred", {}).get("AP", None),
+                    tasks.get("walkPreferred", {}).get("ML", None),
+                    tasks.get("walkPreferred", {}).get("V", None),
+                    tasks.get("walkFast", {}).get("AP", None),
+                    tasks.get("walkFast", {}).get("ML", None),
+                    tasks.get("walkFast", {}).get("V", None),
+                    tasks.get("walkSlow", {}).get("AP", None),
+                    tasks.get("walkSlow", {}).get("ML", None),
+                    tasks.get("walkSlow", {}).get("V", None),
+                ]
+                writer.writerow(row)
