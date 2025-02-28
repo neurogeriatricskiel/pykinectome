@@ -175,4 +175,4 @@ cython_debug/
 .pypirc
 
 # vscode configuration file
-.vscode
+.vscode/
