@@ -1,6 +1,9 @@
+src/fingerprint.py
 test.py
 test.ipynb
 test_plot*
+allegiance_matrix*
+std_allegiance*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

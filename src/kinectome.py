@@ -226,7 +226,7 @@ def calculate_all_kinectomes(diagnosis, kinematics_list, task_names, tracking_sy
     
     
     # use for debugging particular subjects
-    # debug_ids = ['pp032']
+    debug_ids = ['pp008']
 
     # file name is based on task names and tracking systems defined in the global variables
     for sub_id in disease_sub_ids + matched_control_sub_ids:

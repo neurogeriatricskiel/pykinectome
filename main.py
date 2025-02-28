@@ -28,13 +28,13 @@ elif sys.platform == "win32":
     )
 
 TASK_NAMES = [
-    "walkFast", "walkSlow", "walkPreferred" 
+    "walkPreferred", "walkFast", "walkSlow", 
 ]
 TRACKING_SYSTEMS = [
     "omc"
 ] # add "imu" if needed
 RUN = [
-    'on', 'off'
+    'on'
         ] # add 'off' if needed 
 KINEMATICS = [
        'vel', 'pos', 'acc'
@@ -50,15 +50,13 @@ DIAGNOSIS = ['diagnosis_parkinson'] # a list of diagnoses of interest
 
 PD_ON = ['pp065', 'pp032'] # a list of sub_ids of PD that were measured in on condition
 
-
-
-
 def main() -> None:
     
     # can be done once since it saves the kinectomes as .npy files in the derived_data 
-    kinectome.calculate_all_kinectomes(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, RAW_DATA_PATH, FS, BASE_PATH, MARKER_LIST) 
+    # kinectome.calculate_all_kinectomes(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, RAW_DATA_PATH, FS, BASE_PATH, MARKER_LIST) 
     
-    modularity.modularity_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, RAW_DATA_PATH, BASE_PATH, MARKER_LIST)
+    # use True or False for visualise variable to have allegiance matrices visualised (or not)
+    modularity.modularity_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, RAW_DATA_PATH, BASE_PATH, MARKER_LIST, visualise=False)
 
     
 
