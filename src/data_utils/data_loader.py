@@ -9,7 +9,7 @@ def load_file(file_path: str | Path) -> pd.DataFrame:
     df = pd.read_csv(file_path, sep="\t", header=0)
     return df
 
-def load_events(base_path, sub_id, task_name, run):
+def load_events(base_path, sub_id, task_name, run,linux=False):
 
     """
     Load event data for a given subject, task, and run.
@@ -29,6 +29,8 @@ def load_events(base_path, sub_id, task_name, run):
         The name of the task to filter event files.
     run : str
         The specific run condition ('on' or 'off').
+    linux : bool, optional
+        Flag to indicate if the function is running on a Linux system.
 
     Returns:
     -------
@@ -42,7 +44,10 @@ def load_events(base_path, sub_id, task_name, run):
     - If no matching file is found, the function may raise an IndexError.
 
     """
-    os.chdir(f'{base_path}\\rawdata\\sub-{sub_id}\\motion')
+    if linux:
+        os.chdir(f'{base_path}/rawdata/sub-{sub_id}/motion')
+    else:
+        os.chdir(f'{base_path}\\rawdata\\sub-{sub_id}\\motion')
     file_list = os.listdir()
     event_files = [file for file in file_list if task_name in file and 'events' in file]
 
@@ -81,3 +86,12 @@ def extract_onset_indices(filename):
         return int(match.group(1)), int(match.group(2))
     
     return None, None
+
+
+def merge_dicts(list_of_dicts):
+    import collections 
+    result = collections.defaultdict(list)
+    for d in list_of_dicts:
+        for key, value in d.items():
+            result[key].append(value)
+    return result

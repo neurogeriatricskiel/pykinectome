@@ -7,7 +7,7 @@ matplotlib.use('Agg')  # Use a non-interactive backend
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-def find_gait_cycles(base_path, data: pd.DataFrame, sub_id: str, task_name: str, run: str):
+def find_gait_cycles(base_path, data: pd.DataFrame, sub_id: str, task_name: str, run: str, linux: bool):
     """
     Identifies full left and right gait cycles based on event markers within the valid time range.
 
@@ -16,13 +16,14 @@ def find_gait_cycles(base_path, data: pd.DataFrame, sub_id: str, task_name: str,
     - sub_id (str): Subject identifier.
     - task_name (str): Name of the task performed.
     - run (str): Specifies the run condition (e.g., "on" or "off" for PD subjects).
+    - linux (bool): Flag indicating whether the code is run on a Linux system.
 
     Returns:
     - gait_cycles (list of tuples): List of (start, end) indices for each detected gait cycle.
     - start_onset (int): The index corresponding to the start of the valid motion tracking period.
     """
 
-    events = data_loader.load_events(base_path, sub_id, task_name, run)
+    events = data_loader.load_events(base_path, sub_id, task_name, run,linux)
 
     start_onset = int(events.loc[events['event_type'] == 'start', 'onset'].values[0])
     stop_onset = int(events.loc[events['event_type'] == 'stop', 'onset'].values[0])
@@ -78,7 +79,7 @@ def segment_data(data: pd.DataFrame, cycle_indices: tuple):
     return cycle_data
     
 
-def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: str, tracksys: str, kinematics: str, base_path, marker_list):
+def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: str, tracksys: str, kinematics: str, base_path, marker_list, linux = False):
     """
     Computes Pearson correlation matrices for marker positions in x, y, and z coordinates across gait cycles 
     and saves them as .npy files.
@@ -91,12 +92,13 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
     - tracksys (str): The tracking system used for data collection.
     - base_path (str): Base directory where the kinectome data should be saved.
     - kinematics (str): Marker position or its derivatives (velocity, acceleration) used for calculating kinectomes.
+    - linux (bool): Flag indicating whether the code is run on a Linux system.
 
     Returns:
     - None: The function saves correlation matrices but does not return a value.
     """
 
-    gait_cycles, start_onset = find_gait_cycles(base_path, data, sub_id, task_name, run)
+    gait_cycles, start_onset = find_gait_cycles(base_path, data, sub_id, task_name, run, linux)
 
     for i in range(len(gait_cycles)):
         cycle_indices = gait_cycles[i]
@@ -133,7 +135,10 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
             correlation_matrices[:, :, i] = gait_cycle_data[markers].corr(method='pearson', min_periods=1)
      
         # directory to save 
-        kinectome_path = f"{base_path}\\derived_data\\sub-{sub_id}\\kinectomes"
+        if linux:
+            kinectome_path = f"{base_path}/derived_data/sub-{sub_id}/kinectomes"
+        else:
+            kinectome_path = f"{base_path}\\derived_data\\sub-{sub_id}\\kinectomes"
 
         # Ensure directory exists
         if not os.path.exists(kinectome_path):
@@ -148,7 +153,7 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
         file_path = os.path.join(kinectome_path, file_name)
 
         # visualise_kinectome(correlation_matrices, 'test_plot_kinectome_pres.png', marker_list, sub_id, task_name, kinematics)
-        
+        print(f"Correlation_matrices shape: {correlation_matrices.shape}")
         # Save kinectomes (as numpy array)
         np.save(file_path, correlation_matrices)   
         
