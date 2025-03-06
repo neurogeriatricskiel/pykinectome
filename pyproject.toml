@@ -19,7 +19,8 @@ dependencies = [
     "community (>=1.0.0b1,<2.0.0)",
     "python-louvain (>=0.16,<0.17)",
     "scikit-learn (>=1.6.1,<2.0.0)",
-    "kineticstoolkit (>=0.16.0,<0.17.0)"
+    "kineticstoolkit (>=0.16.0,<0.17.0)",
+    "statsmodels (>=0.14.4,<0.15.0)"
 ]
 
 [tool.poetry]

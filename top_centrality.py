@@ -34,7 +34,7 @@ if __name__ == "__main__":
     FS = 200 # sampling rate
     sub_ids = ["pp002"] # I have only this data 
 
-    GEN_KINECTOMES = False # generate the kinectomes in first run 
+    GEN_KINECTOMES = True # generate the kinectomes in first run 
 
     if GEN_KINECTOMES:
         for sub_id in sub_ids:
@@ -48,7 +48,7 @@ if __name__ == "__main__":
                             # trim, reduce dimensions, interpolate, rotate, differentiate
                             preprocessed_data = preprocessing.all_preprocessing(data, sub_id, task_name, run, tracksys, kinematics, FS)
 
-                            calculate_kinectome(preprocessed_data, sub_id, task_name, run, tracksys, kinematics, DATA_PATH, MARKER_LIST,linux=True)
+                            calculate_kinectome(preprocessed_data, sub_id, task_name, run, tracksys, kinematics, DATA_PATH, MARKER_LIST,linux=True,dcor=True)
 
 
                         except Exception as e:

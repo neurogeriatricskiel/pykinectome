@@ -6,6 +6,8 @@ import matplotlib
 matplotlib.use('Agg')  # Use a non-interactive backend
 import matplotlib.pyplot as plt
 import seaborn as sns
+from statsmodels.stats.dist_dependence_measures import distance_correlation
+from tqdm import tqdm
 
 def find_gait_cycles(base_path, data: pd.DataFrame, sub_id: str, task_name: str, run: str, linux: bool):
     """
@@ -77,9 +79,23 @@ def segment_data(data: pd.DataFrame, cycle_indices: tuple):
     cycle_data = data[cycle_indices[0]:cycle_indices[1]]
 
     return cycle_data
-    
 
-def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: str, tracksys: str, kinematics: str, base_path, marker_list, linux = False):
+def distance_correlation_matrix(data: pd.DataFrame, markers_list: list):
+    """
+    Computes the distance correlation matrix for marker positions in x, y, and z coordinates across gait cycles.
+
+    Parameters:
+    - data (pd.DataFrame): The motion tracking data.
+    - marker_list (list): List of marker names.
+    Returns:
+    - distance_correlation_matrix (np.ndarray): The distance correlation matrix.
+    """
+    
+    dcor = np.array([[distance_correlation(data[m1], data[m2]) for m2 in markers_list] for m1 in markers_list])
+
+    return dcor
+
+def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: str, tracksys: str, kinematics: str, base_path, marker_list, linux = False, dcor = False):
     """
     Computes Pearson correlation matrices for marker positions in x, y, and z coordinates across gait cycles 
     and saves them as .npy files.
@@ -93,14 +109,15 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
     - base_path (str): Base directory where the kinectome data should be saved.
     - kinematics (str): Marker position or its derivatives (velocity, acceleration) used for calculating kinectomes.
     - linux (bool): Flag indicating whether the code is run on a Linux system.
+    - dcor (bool): Flag indicating whether to use distance correlation instead of Pearson correlation.
 
     Returns:
     - None: The function saves correlation matrices but does not return a value.
     """
 
     gait_cycles, start_onset = find_gait_cycles(base_path, data, sub_id, task_name, run, linux)
-
-    for i in range(len(gait_cycles)):
+    cycles_iterator = tqdm(gait_cycles, desc=f"---Subject: {sub_id}, Task: {task_name}---")
+    for i,cycles in enumerate(cycles_iterator): #range(len(gait_cycles)):
         cycle_indices = gait_cycles[i]
 
         gait_cycle_data = segment_data(data, cycle_indices)
@@ -132,7 +149,10 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
         # Compute correlation for each coordinate (x, y, z)
         for i, coord in enumerate([f'_{kinematics.upper()}_x', f'_{kinematics.upper()}_y', f'_{kinematics.upper()}_z']):
             markers = [m + coord for m in marker_list]
-            correlation_matrices[:, :, i] = gait_cycle_data[markers].corr(method='pearson', min_periods=1)
+            if dcor:
+                correlation_matrices[:, :, i] = distance_correlation_matrix(gait_cycle_data[markers], markers)
+            else:
+                correlation_matrices[:, :, i] = gait_cycle_data[markers].corr(method='pearson', min_periods=1)
      
         # directory to save 
         if linux:
