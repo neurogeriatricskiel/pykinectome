@@ -17,7 +17,8 @@ dependencies = [
     "seaborn (>=0.13.2,<0.14.0)",
     "networkx (>=3.4.2,<4.0.0)",
     "community (>=1.0.0b1,<2.0.0)",
-    "python-louvain (>=0.16,<0.17)"
+    "python-louvain (>=0.16,<0.17)",
+    "statsmodels (>=0.14.4,<0.15.0)"
 ]
 
 [tool.poetry]
