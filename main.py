@@ -37,7 +37,7 @@ RUN = [
     'on'
         ] # add 'off' if needed 
 KINEMATICS = [
-       'vel', 'pos', 'acc'
+       'pos', 'vel', 'acc'
                 ] # for calculating kinectomes using position, velocity and acceleration data (what about jerk?)
 FS = 200 # sampling rate 
 # ordered list of markers
@@ -50,13 +50,22 @@ DIAGNOSIS = ['diagnosis_parkinson'] # a list of diagnoses of interest
 
 PD_ON = ['pp065', 'pp032'] # a list of sub_ids of PD that were measured in on condition
 
+# path where the results of modularity analysis (std within subjects (csv), avg subject allegiance matrices (pkl) are stored)
+RESULT_BASE_PATH = 'C:/Users/Karolina/Desktop/pykinectome/results'
+
 def main() -> None:
     
     # can be done once since it saves the kinectomes as .npy files in the derived_data 
-    # kinectome.calculate_all_kinectomes(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, RAW_DATA_PATH, FS, BASE_PATH, MARKER_LIST) 
+    kinectome.calculate_all_kinectomes(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, RAW_DATA_PATH, FS, BASE_PATH, MARKER_LIST) 
     
     # use True or False for visualise variable to have allegiance matrices visualised (or not)
-    modularity.modularity_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, RAW_DATA_PATH, BASE_PATH, MARKER_LIST, visualise=False)
+    # use True or False for analysing variability within subject allegiance matrices (saved as csv files after one run)
+    # use True or False for computing the average allegiance matrices per person, per speed and per direction (saved as pkl files after one run)
+
+    modularity.modularity_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST, 
+                               analyse_intra_sub = False, visualise=False, 
+                               
+                               avg_per_speed_computed = True, result_path = RESULT_BASE_PATH)
 
     
 
