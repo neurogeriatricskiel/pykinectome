@@ -1,7 +1,10 @@
 import matplotlib
+import matplotlib
+matplotlib.use('Agg')  # Use a non-interactive backend
 import matplotlib.pyplot as plt
 import os
 import numpy as np
+from pathlib import Path
 import networkx as nx
 from src.data_utils import data_loader
 from src.kinectome import *
@@ -16,14 +19,14 @@ if __name__ == "__main__":
     # LOADING CONFIG CONSTANTS
     ##
     # DATA-PATH
-    DATA_PATH = "/home/prdc/Dokumente/Projects-KI/uksh"
+    DATA_PATH = Path("Z:\\Keep Control\\Data\\lab dataset")
     # Seleted tasks
     TASK_NAMES = [
-    "walkFast", "walkSlow", "walkPreferred" 
+    "walkFast" 
     ]
     TRACKING_SYSTEMS = ["omc"]
     # values to be extracted 
-    KINEMATICS = ['vel', 'pos', 'acc']
+    KINEMATICS = ['acc']
     # ordered list of markers
     MARKER_LIST = ['head', 'ster', 'l_sho', 'r_sho',  
                 'l_elbl', 'r_elbl','l_wrist', 'r_wrist', 'l_hand', 'r_hand', 
@@ -32,7 +35,7 @@ if __name__ == "__main__":
                 'l_ank', 'r_ank', 'l_toe', 'r_toe']
     run = None # dont have id "run" in sample data that I have 
     FS = 200 # sampling rate
-    sub_ids = ["pp002"] # I have only this data 
+    sub_ids = ["pp085"] # I have only this data 
 
     GEN_KINECTOMES = True # generate the kinectomes in first run 
 
@@ -41,14 +44,15 @@ if __name__ == "__main__":
             for kinematics in KINEMATICS:
                 for task_name in TASK_NAMES:
                     for tracksys in TRACKING_SYSTEMS: 
-                        file_path = f"{DATA_PATH}/rawdata/sub-{sub_id}/motion/sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_motion.tsv"
+                        file_path = DATA_PATH / "rawdata" / f"sub-{sub_id}" / "motion" / f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_motion.tsv"
 
                         try:
+                            os.chdir(Path(DATA_PATH / "rawdata" / f"sub-{sub_id}" / "motion"))
                             data = data_loader.load_file(file_path)
                             # trim, reduce dimensions, interpolate, rotate, differentiate
                             preprocessed_data = preprocessing.all_preprocessing(data, sub_id, task_name, run, tracksys, kinematics, FS)
 
-                            calculate_kinectome(preprocessed_data, sub_id, task_name, run, tracksys, kinematics, DATA_PATH, MARKER_LIST,linux=True,dcor=True)
+                            calculate_kinectome(preprocessed_data, sub_id, task_name, run, tracksys, kinematics, DATA_PATH, MARKER_LIST,linux=False,dcor=True)
 
 
                         except Exception as e:
@@ -82,7 +86,7 @@ if __name__ == "__main__":
                             ax.set_xlabel("Centrality")
                             ax.set_ylabel("Markers")
                             ax.set_title(f"{kinematics} {task_name} {idx}: Centrality")
-                            save_path = f"{DATA_PATH}/plots"
+                            save_path = Path("C:\\Users\\Karolina\\Desktop\\pykinectome\\pykinectome\\src\\preprocessing")
                             # Ensure directory exists
                             if not os.path.exists(save_path):
                                 os.makedirs(save_path)
