@@ -1,6 +1,9 @@
 test.py
 test.ipynb
 test_plot*
+allegiance_matrix*
+pp0*
+std_*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
