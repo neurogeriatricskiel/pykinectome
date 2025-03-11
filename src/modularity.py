@@ -104,7 +104,10 @@ def modularity_analysis(kinectomes, marker_list):
     
     return all_allegiance_matrices
 
-def modularity_main(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, raw_data_path, base_path, marker_list, visualise):
+
+
+def modularity_main(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list):
+
     disease_sub_ids, matched_control_sub_ids = groups.define_groups(diagnosis)
 
     # Store variability scores structured per subject, task, and direction
@@ -154,11 +157,11 @@ def modularity_main(diagnosis, kinematics_list, task_names, tracking_systems, ru
                             # Store mean variability per direction (single score)
                             variability_scores[group][sub_id][task_name][direction] = round(np.mean(std_sub_allegiance_matrices[direction]), 2)
                             
-                            if visualise:
-                                visualise_allegiance_matrix(avg_sub_allegiance_matrices[direction], marker_list, sub_id, task_name, direction,
-                                                            figname=f'allegiance_matrix_{sub_id}_{task_name}_{direction}.png')
-                                visualise_allegiance_matrix(std_sub_allegiance_matrices[direction], marker_list, sub_id, task_name, direction,
-                                                            figname=f'std_allegiance_matrix_{sub_id}_{task_name}_{direction}.png')
+                            # if visualise:
+                            #     visualise_allegiance_matrix(avg_sub_allegiance_matrices[direction], marker_list, sub_id, task_name, direction,
+                            #                                 figname=f'allegiance_matrix_{sub_id}_{task_name}_{direction}.png')
+                            #     visualise_allegiance_matrix(std_sub_allegiance_matrices[direction], marker_list, sub_id, task_name, direction,
+                                                            # figname=f'std_allegiance_matrix_{sub_id}_{task_name}_{direction}.png')
                             
 
         save_variability_to_csv(variability_scores, kinematics)

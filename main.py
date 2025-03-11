@@ -5,7 +5,7 @@ from src.preprocessing.filter import (
 from src.data_utils import groups
 # from src.kinectome import calculate_crl_mtrx
 from src.preprocessing import preprocessing
-from src import kinectome, modularity, fingerprint
+from src import kinectome, modularity, kinectome_characteristics
 from pathlib import Path
 import sys
 import pandas as pd
@@ -37,7 +37,7 @@ RUN = [
     'on'
         ] # add 'off' if needed 
 KINEMATICS = [
-       'pos', 'vel', 'acc'
+       'acc'
                 ] # for calculating kinectomes using position, velocity and acceleration data (what about jerk?)
 FS = 200 # sampling rate 
 # ordered list of markers
@@ -56,16 +56,23 @@ RESULT_BASE_PATH = 'C:/Users/Karolina/Desktop/pykinectome/results'
 def main() -> None:
     
     # can be done once since it saves the kinectomes as .npy files in the derived_data 
-    kinectome.calculate_all_kinectomes(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, RAW_DATA_PATH, FS, BASE_PATH, MARKER_LIST) 
+    # kinectome.calculate_all_kinectomes(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, RAW_DATA_PATH, FS, BASE_PATH, MARKER_LIST) 
     
+    # investigate kinectome characterisstics (mean and standard deviation of the kinectomes)
+    kinectome_characteristics.compare_between_groups(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST, RESULT_BASE_PATH)
+
+
     # use True or False for visualise variable to have allegiance matrices visualised (or not)
     # use True or False for analysing variability within subject allegiance matrices (saved as csv files after one run)
     # use True or False for computing the average allegiance matrices per person, per speed and per direction (saved as pkl files after one run)
-
-    modularity.modularity_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST, 
-                               analyse_intra_sub = False, visualise=False, 
+    modularity.modularity_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST)
                                
-                               avg_per_speed_computed = True, result_path = RESULT_BASE_PATH)
+                               
+                               
+                               
+                            #    analyse_intra_sub = False, visualise=False, 
+                               
+                            #    avg_per_speed_computed = False, result_path = RESULT_BASE_PATH)
 
     
 
