@@ -1,5 +1,6 @@
 import os
-from src.data_utils import data_loader
+from src.data_utils import data_loader, groups
+from src.preprocessing.preprocessing import all_preprocessing
 import pandas as pd
 import numpy as np
 import matplotlib
@@ -25,7 +26,7 @@ def find_gait_cycles(base_path, data: pd.DataFrame, sub_id: str, task_name: str,
     - start_onset (int): The index corresponding to the start of the valid motion tracking period.
     """
 
-    events = data_loader.load_events(base_path, sub_id, task_name, run,linux)
+    events = data_loader.load_events(base_path, sub_id, task_name, run)
 
     start_onset = int(events.loc[events['event_type'] == 'start', 'onset'].values[0])
     stop_onset = int(events.loc[events['event_type'] == 'stop', 'onset'].values[0])
@@ -63,6 +64,58 @@ def find_gait_cycles(base_path, data: pd.DataFrame, sub_id: str, task_name: str,
 
     return gait_cycles, start_onset
 
+
+def find_full_leftRight_cycles(base_path, data: pd.DataFrame, sub_id: str, task_name: str, run: str):
+    """
+    Identifies gait cycles that include both a full right and a full left gait cycle.
+
+    Parameters:
+    - base_path (str): Base directory path.
+    - data (pd.DataFrame): The motion tracking data.
+    - sub_id (str): Subject identifier.
+    - task_name (str): Name of the task performed.
+    - run (str): Specifies the run condition (e.g., "on" or "off" for PD subjects).
+
+    Returns:
+    - gait_cycles (list of tuples): List of (start, end) indices for each full gait cycle.
+    - start_onset (int): The index corresponding to the start of the valid motion tracking period.
+    """
+
+    events = data_loader.load_events(base_path, sub_id, task_name, run)
+
+    start_onset = int(events.loc[events['event_type'] == 'start', 'onset'].values[0])
+    stop_onset = int(events.loc[events['event_type'] == 'stop', 'onset'].values[0])
+
+    # Adjust event indices relative to the trimmed data (starting at 0)
+    events['onset'] = events['onset'] - start_onset
+
+    # Ensure only events within the valid start-stop range are considered
+    valid_events = events[(events['onset'] >= 0) & (events['onset'] <= (stop_onset - start_onset))]
+
+    icl_indices = valid_events[valid_events['event_type'] == 'initial_contact_left']['onset'].values
+    icr_indices = valid_events[valid_events['event_type'] == 'initial_contact_right']['onset'].values
+
+    gait_cycles = []
+
+    i, j = 0, 0
+
+    while i < len(icr_indices) - 1 and j < len(icl_indices) - 1:
+        start_cycle = icr_indices[i]  # Start at right initial contact
+        end_cycle = None
+
+        # Find the second left initial contact after the right initial contact
+        for j in range(len(icl_indices)):
+            if icl_indices[j] > start_cycle:
+                if j + 1 < len(icl_indices):  # Ensure we can get the next left contact
+                    end_cycle = icl_indices[j + 1]
+                    break
+
+        if end_cycle and start_cycle >= 0 and end_cycle <= len(data):
+            gait_cycles.append((int(start_cycle), int(end_cycle)))
+
+        i += 1  # Move to the next right initial contact
+
+    return gait_cycles, start_onset
 
 def segment_data(data: pd.DataFrame, cycle_indices: tuple):
     """
@@ -115,7 +168,7 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
     - None: The function saves correlation matrices but does not return a value.
     """
 
-    gait_cycles, start_onset = find_gait_cycles(base_path, data, sub_id, task_name, run, linux)
+    gait_cycles, start_onset = find_full_leftRight_cycles(base_path, data, sub_id, task_name, run)
     cycles_iterator = tqdm(gait_cycles, desc=f"---Subject: {sub_id}, Task: {task_name}---")
     for i,cycles in enumerate(cycles_iterator): #range(len(gait_cycles)):
         cycle_indices = gait_cycles[i]
@@ -210,3 +263,96 @@ def visualise_kinectome(kinectome, figname, marker_list, sub_id, task_name, kine
     os.chdir('C:/Users/Karolina/Desktop/pykinectome/pykinectome/src/preprocessing')
     plt.tight_layout()  # Adjust layout to prevent overlap
     plt.savefig(figname, dpi=600)
+
+def calculate_all_kinectomes(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, raw_data_path, fs, base_path, marker_list) -> None:
+    """
+    Calculates kinectomes for all subejcts. 
+    This function iterates over a predefined list of subjects, tasks, tracking systems, and kinematic data types     
+    to locate, load, preprocess, and analyze motion data files. Preprocessed data is then used to compute kinectomes. 
+
+    Workflow:
+        1. Make the disease (based on diagnosis variable) and matched control groups.
+        2. Iterate through subjects, tasks, kinematics, and tracking systems to locate relevant motion files.
+        3. Load motion tracking data from files.
+        4. Preprocess data (trimming, dimension reduction, interpolation, rotation, differentiation).
+        5. Compute kinectomes for each gait cycle and save them as `.npy` files. 
+
+    Special Handling:
+        - Subjects measured in the "on" medication condition may have filenames without explicit "run-on".
+        - Control subjects (matched controls) do not have medication conditions and are processed with `run=None`. 
+
+    Global Variables Used:
+        - `diagnosid` (list): Specifies the disease of interest. 
+        - `kinematics_list` (list): Types of kinematic data (e.g., position, velocity, acceleration).
+        - `task_names` (list): Motion task names.
+        - `tracking_systems` (list): Motion tracking systems used.
+        - `runs` (list): Run conditions (e.g., "on", "off") for pwPD.
+        - `raw_data_path` (str): Path to the raw motion data files.
+        - `base_path` (str): Path to save computed kinectomes.
+        - `fs` (float): Sampling frequency of motion data.
+        - `marker_list` (list): List of markers used in motion tracking.
+
+    Returns:
+        None
+    """
+    disease_sub_ids, matched_control_sub_ids = groups.define_groups(diagnosis)
+
+    # use for debugging particular subjects
+    # debug_ids = ['pp032']
+
+    # file name is based on task names and tracking systems defined in the global variables
+ 
+
+    for sub_id in disease_sub_ids + matched_control_sub_ids:
+    # for sub_id in debug_ids:
+        for kinematics in kinematics_list: 
+            for task_name in task_names:
+                for tracksys in tracking_systems:
+                    for run in runs:
+                        if sub_id in pd_on: # those sub ids which are measured in 'on' condition but there is no 'run-on' in the filename
+                            run = 'on'
+                        else:
+                            run = run                      
+                        # change current working directory to the folder with motion data
+                        os.chdir(f'{raw_data_path}\\sub-{sub_id}\\motion')
+                        
+                        file_list = os.listdir()
+ 
+                        file_path = None  # Initialize file_path for each loop
+ 
+                        for file in file_list:
+                            if sub_id in file and task_name in file and tracksys in file and 'motion' in file:
+                                # Check if the 'run' condition matches 
+                                if f'run-{run}' in file:
+                                    file_path = f"{raw_data_path}\\sub-{sub_id}\\motion\\{file}"
+                                    break # Exit the loop once a matching file is found
+ 
+                                # Include files without any 'run-on' or 'run-off' condition (run-on and run-off are only applicable to PD)
+
+                                elif not any(f"run-{cond}" in file for cond in ["on", "off"]):
+                                    file_path = f"{raw_data_path}\\sub-{sub_id}\\motion\\{file}"
+                                    break
+ 
+                        if file_path:
+                            # Load the data as a pandas dataframe
+                            data = data_loader.load_file(file_path=file_path) 
+                            
+                            # trim, reduce dimensions, interpolate, rotate, differentiate
+                            preprocessed_data = all_preprocessing(data, sub_id, task_name, run, tracksys, kinematics, fs)
+ 
+                            if preprocessed_data is None:
+                                continue                                
+ 
+                            # Calculate kinectomes (for each gait cycle) and save in derived_data/kinectomes
+                            # can be done only once for each derivative (position, velocity, acceleration etc.) and then commented out to save on running time
+
+                            if sub_id in matched_control_sub_ids: # pwPD that were measured on medication and have no 'run' in the filename
+                                run = None         
+
+                            # calculates the kinectomes in AP, ML and V directions and saves as .npy files
+                            calculate_kinectome(preprocessed_data, sub_id, task_name, run, tracksys, kinematics, base_path, marker_list)
+                        else:
+                            print(f"No matching motion file found for sub-{sub_id}, task-{task_name}, tracksys-{tracksys}, run-{run}")
+ 
+
+    return
