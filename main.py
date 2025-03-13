@@ -65,11 +65,8 @@ def main() -> None:
     # use True or False for visualise variable to have allegiance matrices visualised (or not)
     # use True or False for analysing variability within subject allegiance matrices (saved as csv files after one run)
     # use True or False for computing the average allegiance matrices per person, per speed and per direction (saved as pkl files after one run)
-    modularity.modularity_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST)
-                               
-                               
-                               
-                               
+    # modularity.modularity_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST, RESULT_BASE_PATH)
+                            
                             #    analyse_intra_sub = False, visualise=False, 
                                
                             #    avg_per_speed_computed = False, result_path = RESULT_BASE_PATH)
