@@ -6,84 +6,63 @@ import numpy as np
 import networkx as nx
 from src.data_utils.data_loader import load_kinectomes
 from src.data_utils import groups
+from src.data_utils import plotting
 import seaborn as sns
 import csv
 import pickle
 from pathlib import Path
 
-def visualise_allegiance_matrix(allegiance_matrix, marker_list, sub_id, task_name, direction, figname):
-    # Define marker ordering
-    left_markers = [m for m in marker_list if m.startswith('l_')]
-    right_markers = [m for m in marker_list if m.startswith('r_')]
-    middle_markers = ['head', 'ster']
-    ordered_marker_list = middle_markers + left_markers + right_markers
+
+# def save_variability_to_csv(variability_scores, kinematics):
+#     """
+#     Saves variability scores to a CSV file.
+
+#     Parameters:
+#     - variability_scores (dict): Dictionary with variability scores structured as:
+#         variability_scores[group][sub_id][task_name][direction]
+#     - kinematics (str): The kinematics type (e.g., 'position', 'velocity', 'acceleration').
+#     - output_dir (str): Directory where CSV files will be saved.
+#     """
+#     os.chdir('C:\\Users\\Karolina\\Desktop\\pykinectome\\results')
+#     # with open('variability_scores_velocity.pickle', 'rb') as handle:
+#     #     variability_scores = pickle.load(handle)
+#     output_dir = 'C:\\Users\\Karolina\\Desktop\\pykinectome\\results'
     
-    # Get new indices based on the ordered list
-    index_map = {marker: i for i, marker in enumerate(marker_list)}
-    new_order = [index_map[m] for m in ordered_marker_list]
+#     # Ensure the output directory exists
+#     os.makedirs(output_dir, exist_ok=True)
 
-    # Reorder rows and columns
-    reordered_matrix = allegiance_matrix[np.ix_(new_order, new_order)]
-    
-    # visualise
-    plt.figure(figsize=(14, 11))
-    sns.heatmap(reordered_matrix, cmap="coolwarm", xticklabels=ordered_marker_list, yticklabels=ordered_marker_list)  
-    plt.title(f"Allegiance Matrix of {sub_id} during {task_name} in {direction} direction")
-    os.chdir('C:/Users/Karolina/Desktop/pykinectome/pykinectome/src/preprocessing')
-    plt.tight_layout()  # Adjust layout to prevent overlap
-    plt.savefig(figname, dpi=600)
+#     # Define the output file name
+#     output_file = os.path.join(output_dir, f"variability_{kinematics}.csv")
 
+#     # Define CSV column names
+#     columns = ["group", "subject_id", 
+#                "pref_AP", "pref_ML", "pref_V",
+#                "fast_AP", "fast_ML", "fast_V",
+#                "slow_AP", "slow_ML", "slow_V"]
 
-def save_variability_to_csv(variability_scores, kinematics):
-    """
-    Saves variability scores to a CSV file.
+#     # Open the CSV file for writing
+#     with open(output_file, mode="w", newline="") as file:
+#         writer = csv.writer(file)
+#         writer.writerow(columns)  # Write header
 
-    Parameters:
-    - variability_scores (dict): Dictionary with variability scores structured as:
-        variability_scores[group][sub_id][task_name][direction]
-    - kinematics (str): The kinematics type (e.g., 'position', 'velocity', 'acceleration').
-    - output_dir (str): Directory where CSV files will be saved.
-    """
-    os.chdir('C:\\Users\\Karolina\\Desktop\\pykinectome\\results')
-    # with open('variability_scores_velocity.pickle', 'rb') as handle:
-    #     variability_scores = pickle.load(handle)
-    output_dir = 'C:\\Users\\Karolina\\Desktop\\pykinectome\\results'
-    
-    # Ensure the output directory exists
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Define the output file name
-    output_file = os.path.join(output_dir, f"variability_{kinematics}.csv")
-
-    # Define CSV column names
-    columns = ["group", "subject_id", 
-               "pref_AP", "pref_ML", "pref_V",
-               "fast_AP", "fast_ML", "fast_V",
-               "slow_AP", "slow_ML", "slow_V"]
-
-    # Open the CSV file for writing
-    with open(output_file, mode="w", newline="") as file:
-        writer = csv.writer(file)
-        writer.writerow(columns)  # Write header
-
-        # Iterate through groups (PD and Control)
-        for group, subjects in variability_scores.items():
-            for sub_id, tasks in subjects.items():
-                # Extract variability scores or set to None if missing
-                row = [
-                    group,
-                    sub_id,
-                    tasks.get("walkPreferred", {}).get("AP", None),
-                    tasks.get("walkPreferred", {}).get("ML", None),
-                    tasks.get("walkPreferred", {}).get("V", None),
-                    tasks.get("walkFast", {}).get("AP", None),
-                    tasks.get("walkFast", {}).get("ML", None),
-                    tasks.get("walkFast", {}).get("V", None),
-                    tasks.get("walkSlow", {}).get("AP", None),
-                    tasks.get("walkSlow", {}).get("ML", None),
-                    tasks.get("walkSlow", {}).get("V", None),
-                ]
-                writer.writerow(row)
+#         # Iterate through groups (PD and Control)
+#         for group, subjects in variability_scores.items():
+#             for sub_id, tasks in subjects.items():
+#                 # Extract variability scores or set to None if missing
+#                 row = [
+#                     group,
+#                     sub_id,
+#                     tasks.get("walkPreferred", {}).get("AP", None),
+#                     tasks.get("walkPreferred", {}).get("ML", None),
+#                     tasks.get("walkPreferred", {}).get("V", None),
+#                     tasks.get("walkFast", {}).get("AP", None),
+#                     tasks.get("walkFast", {}).get("ML", None),
+#                     tasks.get("walkFast", {}).get("V", None),
+#                     tasks.get("walkSlow", {}).get("AP", None),
+#                     tasks.get("walkSlow", {}).get("ML", None),
+#                     tasks.get("walkSlow", {}).get("V", None),
+#                 ]
+#                 writer.writerow(row)
 
 def build_graph(kinectome, marker_list):
     """Builds weighted graphs for AP, ML, V directions while preserving meaningful negative correlations."""
@@ -312,14 +291,96 @@ def load_allegiance_matrices(diagnosis, kinematics_list, task_names, tracking_sy
 
     return avg_allegience_matrices, std_allegience_matrices
 
+def calculate_avg_allg_mtrx(avg_allegiance_matrices):
+
+    """
+    Compute average matrices for each group, task, kinematic type, and direction.
+    
+    Parameters:
+    - avg_allegiance_matrices: Dictionary with nested structure containing all allegiance matrices
+    
+    Returns:
+    - Dictionary with structure {group: {task: {kinematic: {direction: avg_matrix}}}}
+    """
+    group_avg_matrices = {}
+    
+    # Iterate through each group
+    for group, participants in avg_allegiance_matrices.items():
+        group_avg_matrices[group] = {}
+        
+        # Find all unique tasks across all participants
+        all_tasks = set()
+        for participant_data in participants.values():
+            all_tasks.update(participant_data.keys())
+        
+        # Initialize task dictionaries
+        for task in all_tasks:
+            group_avg_matrices[group][task] = {}
+        
+        # Find all unique kinematic types and directions
+        all_kinematics = {}
+        for participant_id, participant_data in participants.items():
+            for task in participant_data:
+                if task not in all_kinematics:
+                    all_kinematics[task] = {}
+                
+                for kinematic, direction_data in participant_data[task].items():
+                    if kinematic not in all_kinematics[task]:
+                        all_kinematics[task][kinematic] = set()
+                    
+                    all_kinematics[task][kinematic].update(direction_data.keys())
+        
+        # Compute averages for each task, kinematic, direction combination
+        for task in all_tasks:
+            for kinematic in all_kinematics.get(task, {}):
+                group_avg_matrices[group][task][kinematic] = {}
+                
+                for direction in all_kinematics[task][kinematic]:
+                    # Collect matrices for this combination
+                    valid_matrices = []
+                    
+                    for participant_id, participant_data in participants.items():
+                        if (task in participant_data and 
+                            kinematic in participant_data[task] and 
+                            direction in participant_data[task][kinematic]):
+                            # Get the matrix
+                            matrix = participant_data[task][kinematic][direction]
+                            
+                            # Only include non-None matrices with actual content and correct shape
+                            if matrix is not None and hasattr(matrix, 'shape') and matrix.shape == (22, 22):
+                                valid_matrices.append(matrix)
+                    
+                    # Compute average if we have valid matrices
+                    if valid_matrices:
+                        # All matrices should be numpy arrays with shape (22, 22)
+                        avg_matrix = np.mean(valid_matrices, axis=0)
+                        group_avg_matrices[group][task][kinematic][direction] = avg_matrix
+    
+    return group_avg_matrices
+
+def plot_all_allegiance_matrices(allegiance_matrices, marker_list, result_base_path):
+    """ visualise and save all group allegiance matrices as .png
+    """
+    
+    for group in allegiance_matrices.keys():
+        for task in allegiance_matrices[group].keys():
+            for kinematic in allegiance_matrices[group][task].keys():
+                for direction in allegiance_matrices[group][task][kinematic].keys():
+                    matrix = allegiance_matrices[group][task][kinematic][direction]
+                    plotting.visualise_allegiance_matrix(matrix, marker_list, group, task, kinematic, direction, result_base_path)
 
 
-def modularity_main(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list, result_path):
+def modularity_main(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list, result_base_path):
     
     
-    avg_allegience_matrices, std_allegience_matrices = load_allegiance_matrices(diagnosis, kinematics_list, task_names, 
+    avg_subject_allegience_matrices, std_allegience_matrices = load_allegiance_matrices(diagnosis, kinematics_list, task_names, 
                                                                                 tracking_systems, runs, pd_on, base_path,
-                                                                                marker_list, result_path)
+                                                                                marker_list, result_base_path)
+    
 
+    average_group_allegiance_matrices = calculate_avg_allg_mtrx(avg_subject_allegience_matrices)
+
+    # 
+    plot_all_allegiance_matrices(average_group_allegiance_matrices, marker_list, result_base_path)
 
     return None

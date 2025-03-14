@@ -59,13 +59,14 @@ def main() -> None:
     # kinectome.calculate_all_kinectomes(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, RAW_DATA_PATH, FS, BASE_PATH, MARKER_LIST) 
     
     # investigate kinectome characterisstics (mean and standard deviation of the kinectomes)
-    kinectome_characteristics.compare_between_groups(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST, RESULT_BASE_PATH)
+    # uses permutation analysis (Spearman's rho) to check if the matrices correlate with one another 
+    # kinectome_characteristics.compare_between_groups(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST, RESULT_BASE_PATH)
 
 
     # use True or False for visualise variable to have allegiance matrices visualised (or not)
     # use True or False for analysing variability within subject allegiance matrices (saved as csv files after one run)
     # use True or False for computing the average allegiance matrices per person, per speed and per direction (saved as pkl files after one run)
-    # modularity.modularity_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST, RESULT_BASE_PATH)
+    modularity.modularity_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST, RESULT_BASE_PATH)
                             
                             #    analyse_intra_sub = False, visualise=False, 
                                
