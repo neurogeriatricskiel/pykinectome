@@ -166,11 +166,11 @@ def permutation_test_one_p(variability_scores, task_names, kinematics_list, mark
 
 
                 # calculate the correlation between two matrices
-                rho, p_value = stats.spearmanr(permutation.upper(avg_group1), permutation.upper(avg_group1))
+                rho, p_value = stats.spearmanr(permutation.upper(avg_group1), permutation.upper(avg_group2))
                 plotting.plot_avg_matrices(avg_group1, avg_group2, group1, group2, marker_list, task, direction, matrix_type, result_base_path, rho, p_value)
 
                 permutation.permute(avg_group1, avg_group2, marker_list, task, matrix_type, kinematic, direction, result_base_path)
-             
+
     return results
 
 
@@ -185,4 +185,4 @@ def compare_between_groups(diagnosis_list, kinematics_list, task_names, tracking
 
     avg_p_values = permutation_test_one_p(matrices, task_names, kinematics_list, marker_list, result_base_path, matrix_type='avg', n_permutations=10000)
     
-    
+    print()
