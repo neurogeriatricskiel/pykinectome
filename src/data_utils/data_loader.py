@@ -70,8 +70,11 @@ def load_kinectomes(base_path, sub_id, task_name, tracksys, run, kinematics):
         
         sorted_files = sorted(relevant_files, key=lambda file: extract_onset_indices(file)[0])
         
+        if not sorted_files:
+            return None
+        
         return [np.load(file) for file in sorted_files]
-    
+
     except FileNotFoundError:
         return None
 
