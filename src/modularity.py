@@ -11,7 +11,7 @@ import seaborn as sns
 import csv
 import pickle
 from pathlib import Path
-
+from src.data_utils import permutation
 
 # def save_variability_to_csv(variability_scores, kinematics):
 #     """
@@ -128,6 +128,39 @@ def draw_graph_with_weights(G):
     os.chdir('C:/Users/Karolina/Desktop/pykinectome/pykinectome/src/preprocessing')
     plt.savefig('test_plot_graph.png', dpi=600)
 
+def draw_graph_with_selected_weights(G, selected_edges=None):
+    """
+    Visualizes the graph with edge weights for specified edges only.
+    
+    Parameters:
+    G (networkx.Graph): The graph to visualize
+    selected_edges (list): List of tuples (node1, node2) for which to display weights.
+                          If None, displays all weights.
+    """
+    pos = nx.spring_layout(G)
+    plt.figure(figsize=(8, 6))
+    
+    # Draw all nodes and edges
+    nx.draw(G, pos, with_labels=True, node_color='lightblue', 
+            edge_color='gray', node_size=500, font_size=10)
+    
+    # If no edges are specified, show all weights
+    if selected_edges is None:
+        edge_labels = {(i, j): f"{G[i][j]['weight']:.2f}" for i, j in G.edges()}
+    else:
+        # Filter for only the specified edges, ensuring they exist in the graph
+        edge_labels = {}
+        for node1, node2 in selected_edges:
+            # Check if edge exists (in either direction for undirected graphs)
+            if G.has_edge(node1, node2):
+                edge_labels[(node1, node2)] = f"{G[node1][node2]['weight']:.2f}"
+            elif G.has_edge(node2, node1):  # For undirected graphs
+                edge_labels[(node2, node1)] = f"{G[node2][node1]['weight']:.2f}"
+    
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_size=8)
+    plt.title("Graph Representation of Kinectome")
+    os.chdir('C:/Users/Karolina/Desktop/pykinectome/pykinectome/src/preprocessing')
+    plt.savefig('test_plot_graph.png', dpi=600)
 
 def all_allegiance_matrices_for_subject(kinectomes, marker_list):
     """ A function which saves allegiance matrices built from the kinectomes
@@ -373,14 +406,24 @@ def plot_all_allegiance_matrices(allegiance_matrices, marker_list, result_base_p
 def modularity_main(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list, result_base_path):
     
     
-    avg_subject_allegience_matrices, std_allegience_matrices = load_allegiance_matrices(diagnosis, kinematics_list, task_names, 
+    avg_subject_allegience_matrices, std_subject_allegience_matrices = load_allegiance_matrices(diagnosis, kinematics_list, task_names, 
                                                                                 tracking_systems, runs, pd_on, base_path,
                                                                                 marker_list, result_base_path)
     
 
     average_group_allegiance_matrices = calculate_avg_allg_mtrx(avg_subject_allegience_matrices)
-
+    std_group_allegiance_matrices = calculate_avg_allg_mtrx(std_subject_allegience_matrices)
     # 
-    plot_all_allegiance_matrices(average_group_allegiance_matrices, marker_list, result_base_path)
+    # plot_all_allegiance_matrices(average_group_allegiance_matrices, marker_list, result_base_path)
 
+    task ='walkFast'
+    matrix_type ='allegiance_std'
+    kinematic = 'acc'
+    direction = 'AP'
+    
+    matrix1 = std_group_allegiance_matrices['Parkinson'][task][kinematic][direction]
+    matrix2 = std_group_allegiance_matrices['Control'][task][kinematic][direction]
+
+
+    permutation.permute(matrix1, matrix2, marker_list, task, matrix_type, kinematic, direction, result_base_path)
     return None
