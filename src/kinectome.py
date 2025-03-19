@@ -133,6 +133,43 @@ def segment_data(data: pd.DataFrame, cycle_indices: tuple):
 
     return cycle_data
 
+def timelag_cross_correlation_matrix(data: pd.DataFrame, marker_list: list):
+    """
+    Computes the time-lag cross-correlation matrix for given markers.
+
+    Parameters:
+    - data (pd.DataFrame): Motion tracking data.
+    - marker_list (list): List of marker names.
+
+    Returns:
+    - corr_matrix (np.ndarray): Maximum cross-correlation values.
+    - lag_matrix (np.ndarray): Corresponding time lags.
+    """
+    n_markers = len(marker_list)
+    corr_matrix = np.zeros((n_markers, n_markers))
+    lag_matrix = np.zeros((n_markers, n_markers))
+
+    for i in range(n_markers):
+        for j in range(i + 1, n_markers):  # Compute only upper triangle (symmetric)
+            sig1, sig2 = data[marker_list[i]].values, data[marker_list[j]].values
+
+            # Compute normalized cross-correlation
+            corr = np.correlate(sig1 - sig1.mean(), sig2 - sig2.mean(), mode='full')
+            corr /= np.sqrt(np.sum((sig1 - sig1.mean())**2) * np.sum((sig2 - sig2.mean())**2))
+
+            # Get max correlation and corresponding lag
+            lags = np.arange(-len(sig1) + 1, len(sig1))
+            max_idx = np.argmax(np.abs(corr))
+            
+            corr_matrix[i, j] = corr[max_idx]
+            lag_matrix[i, j] = lags[max_idx]
+            
+            # Mirror results for symmetric matrix
+            corr_matrix[j, i] = corr[max_idx]
+            lag_matrix[j, i] = -lags[max_idx]
+
+    return corr_matrix, lag_matrix/200
+
 def distance_correlation_matrix(data: pd.DataFrame, markers_list: list):
     """
     Computes the distance correlation matrix for marker positions in x, y, and z coordinates across gait cycles.
@@ -148,7 +185,10 @@ def distance_correlation_matrix(data: pd.DataFrame, markers_list: list):
 
     return dcor
 
-def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: str, tracksys: str, kinematics: str, base_path, marker_list, linux = False, dcor = False):
+def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: str, tracksys: str, kinematics: str, base_path, marker_list, 
+                        linux = False, 
+                        dcor = False, 
+                        crosscorr=True):
     """
     Computes Pearson correlation matrices for marker positions in x, y, and z coordinates across gait cycles 
     and saves them as .npy files.
@@ -198,12 +238,17 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
         # Initialize correlation matrices
         num_markers = len(marker_names)
         correlation_matrices = np.zeros((num_markers, num_markers, 3))
-
+        timelag_matrices = np.zeros((num_markers, num_markers, 3))
+        
         # Compute correlation for each coordinate (x, y, z)
         for i, coord in enumerate([f'_{kinematics.upper()}_x', f'_{kinematics.upper()}_y', f'_{kinematics.upper()}_z']):
             markers = [m + coord for m in marker_list]
             if dcor:
                 correlation_matrices[:, :, i] = distance_correlation_matrix(gait_cycle_data[markers], markers)
+            elif crosscorr:
+                corr_lag_results = timelag_cross_correlation_matrix(gait_cycle_data[markers], markers)
+                correlation_matrices[:, :, i] = corr_lag_results[0]
+                timelag_matrices[:, :, i] = corr_lag_results[1]
             else:
                 correlation_matrices[:, :, i] = gait_cycle_data[markers].corr(method='pearson', min_periods=1)
      
@@ -250,7 +295,7 @@ def visualise_kinectome(kinectome, figname, marker_list, sub_id, task_name, kine
     reordered_kinectome = kinectome[np.ix_(marker_indices, marker_indices, [0, 1, 2])]
 
     # Define vmin/vmax for each direction
-    scales = [(0.5, 1) if kinematics == 'pos' else (-1, 1), (-1, 1), (-1, 1)]
+    scales = [(0.5, 1) if kinematics == 'pos' else (0, 1), (0, 1), (0, 1)]
 
     for i, matrix in enumerate(reordered_kinectome.transpose(2, 0, 1)):  # Iterate over 3 matrices
         plt.subplot(1, 3, i + 1)  # Create subplot
