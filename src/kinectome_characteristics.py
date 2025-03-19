@@ -95,7 +95,7 @@ def calc_std_avg_matrices(diagnosis, kinematics_list, task_names, tracking_syste
 
     return variability_scores
 
-def permutation_test_one_p(variability_scores, task_names, kinematics_list, marker_list, result_base_path, matrix_type, n_permutations):
+def permutation_test_one_p(variability_scores, task_names, kinematics_list, marker_list, result_base_path, matrix_type, n_permutations, diff):
     """
     Perform a permutation test comparing two sets of matrices and return a single p-value.
     
@@ -169,6 +169,8 @@ def permutation_test_one_p(variability_scores, task_names, kinematics_list, mark
                 rho, p_value = stats.spearmanr(permutation.upper(avg_group1), permutation.upper(avg_group2))
                 plotting.plot_avg_matrices(avg_group1, avg_group2, group1, group2, marker_list, task, direction, matrix_type, result_base_path, rho, p_value)
 
+                if diff:
+                    permutation.permute_difference_matrix(avg_group1, avg_group2, group1, group2, marker_list, task, kinematic, direction, result_base_path, matrix_type)
                 permutation.permute(avg_group1, avg_group2, marker_list, task, matrix_type, kinematic, direction, result_base_path)
 
     return results
@@ -181,8 +183,10 @@ def compare_between_groups(diagnosis_list, kinematics_list, task_names, tracking
     matrices = calc_std_avg_matrices(diagnosis_list, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path)
 
     # permutation testing of the average and std matrices
-    std_p_values = permutation_test_one_p(matrices, task_names, kinematics_list, marker_list, result_base_path, matrix_type='std', n_permutations=10000)
+    # std_p_values = permutation_test_one_p(matrices, task_names, kinematics_list, marker_list, result_base_path, matrix_type='std', n_permutations=10000)
 
-    avg_p_values = permutation_test_one_p(matrices, task_names, kinematics_list, marker_list, result_base_path, matrix_type='avg', n_permutations=10000)
+    # avg_p_values = permutation_test_one_p(matrices, task_names, kinematics_list, marker_list, result_base_path, matrix_type='avg', n_permutations=10000)
     
+    diff_p_values =  permutation_test_one_p(matrices, task_names, kinematics_list, marker_list, result_base_path, matrix_type='avg', n_permutations=10000, diff=False)
+
     print()
