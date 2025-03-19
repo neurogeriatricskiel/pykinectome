@@ -6,6 +6,8 @@ matplotlib.use('Agg')  # Use a non-interactive backend
 import matplotlib.pyplot as plt
 import scipy.cluster.hierarchy as sch
 from scipy.spatial.distance import squareform, pdist
+import networkx as nx
+import os
 
 def plot_avg_matrices(avg_group1, avg_group2, group1, group2, marker_list, task, direction, matrix_type, result_base_path, rho, p_value):
     " Plots the average or std of the kinectomes based on task and direction"
@@ -196,3 +198,58 @@ def plot_lag_heatmap(lag_matrix, markers_list, title='Time Lag at Maximum Correl
 
     plt.savefig(save_path, dpi = 600)
 
+def draw_graph_with_weights(G, result_base_path = 'C:/Users/Karolina/Desktop/pykinectome/results'):
+    """Visualizes the graph with edge weights."""
+    pos = nx.spring_layout(G)
+    plt.figure(figsize=(8, 6))
+    nx.draw(G, pos, with_labels=True, node_color='lightblue', edge_color='gray', node_size=500, font_size=10)
+    edge_labels = {(i, j): f"{G[i][j]['weight']:.2f}" for i, j in G.edges()}
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_size=8)
+    plt.title("Graph Representation of Kinectome")
+    result_folder = Path(result_base_path) / "graphs"
+
+    # Create the folder if it does not exist
+    result_folder.mkdir(parents=True, exist_ok=True)
+
+    # Define the save path for the figure
+    save_path = result_folder / f"graph_all_weights.png"
+
+def draw_graph_with_selected_weights(G, selected_edges=None, result_base_path = 'C:/Users/Karolina/Desktop/pykinectome/results'):
+    """
+    Visualizes the graph with edge weights for specified edges only.
+    
+    Parameters:
+    G (networkx.Graph): The graph to visualize
+    selected_edges (list): List of tuples (node1, node2) for which to display weights.
+                          If None, displays all weights.
+    """
+    pos = nx.spring_layout(G)
+    plt.figure(figsize=(8, 6))
+    
+    # Draw all nodes and edges
+    nx.draw(G, pos, with_labels=True, node_color='lightblue', 
+            edge_color='gray', node_size=500, font_size=10)
+    
+    # If no edges are specified, show all weights
+    if selected_edges is None:
+        edge_labels = {(i, j): f"{G[i][j]['weight']:.2f}" for i, j in G.edges()}
+    else:
+        # Filter for only the specified edges, ensuring they exist in the graph
+        edge_labels = {}
+        for node1, node2 in selected_edges:
+            # Check if edge exists (in either direction for undirected graphs)
+            if G.has_edge(node1, node2):
+                edge_labels[(node1, node2)] = f"{G[node1][node2]['weight']:.2f}"
+            elif G.has_edge(node2, node1):  # For undirected graphs
+                edge_labels[(node2, node1)] = f"{G[node2][node1]['weight']:.2f}"
+    
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_size=8)
+    plt.title("Graph Representation of Kinectome")
+
+    result_folder = Path(result_base_path) / "graphs"
+
+    # Create the folder if it does not exist
+    result_folder.mkdir(parents=True, exist_ok=True)
+
+    # Define the save path for the figure
+    save_path = result_folder / f"graph_weights.png"

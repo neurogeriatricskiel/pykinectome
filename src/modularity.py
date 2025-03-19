@@ -12,57 +12,7 @@ import csv
 import pickle
 from pathlib import Path
 from src.data_utils import permutation
-
-# def save_variability_to_csv(variability_scores, kinematics):
-#     """
-#     Saves variability scores to a CSV file.
-
-#     Parameters:
-#     - variability_scores (dict): Dictionary with variability scores structured as:
-#         variability_scores[group][sub_id][task_name][direction]
-#     - kinematics (str): The kinematics type (e.g., 'position', 'velocity', 'acceleration').
-#     - output_dir (str): Directory where CSV files will be saved.
-#     """
-#     os.chdir('C:\\Users\\Karolina\\Desktop\\pykinectome\\results')
-#     # with open('variability_scores_velocity.pickle', 'rb') as handle:
-#     #     variability_scores = pickle.load(handle)
-#     output_dir = 'C:\\Users\\Karolina\\Desktop\\pykinectome\\results'
-    
-#     # Ensure the output directory exists
-#     os.makedirs(output_dir, exist_ok=True)
-
-#     # Define the output file name
-#     output_file = os.path.join(output_dir, f"variability_{kinematics}.csv")
-
-#     # Define CSV column names
-#     columns = ["group", "subject_id", 
-#                "pref_AP", "pref_ML", "pref_V",
-#                "fast_AP", "fast_ML", "fast_V",
-#                "slow_AP", "slow_ML", "slow_V"]
-
-#     # Open the CSV file for writing
-#     with open(output_file, mode="w", newline="") as file:
-#         writer = csv.writer(file)
-#         writer.writerow(columns)  # Write header
-
-#         # Iterate through groups (PD and Control)
-#         for group, subjects in variability_scores.items():
-#             for sub_id, tasks in subjects.items():
-#                 # Extract variability scores or set to None if missing
-#                 row = [
-#                     group,
-#                     sub_id,
-#                     tasks.get("walkPreferred", {}).get("AP", None),
-#                     tasks.get("walkPreferred", {}).get("ML", None),
-#                     tasks.get("walkPreferred", {}).get("V", None),
-#                     tasks.get("walkFast", {}).get("AP", None),
-#                     tasks.get("walkFast", {}).get("ML", None),
-#                     tasks.get("walkFast", {}).get("V", None),
-#                     tasks.get("walkSlow", {}).get("AP", None),
-#                     tasks.get("walkSlow", {}).get("ML", None),
-#                     tasks.get("walkSlow", {}).get("V", None),
-#                 ]
-#                 writer.writerow(row)
+from src.data_utils.plotting import draw_graph_with_selected_weights, draw_graph_with_weights
 
 def build_graph(kinectome, marker_list):
     """Builds weighted graphs for AP, ML, V directions while preserving meaningful negative correlations."""
@@ -117,50 +67,6 @@ def compute_allegiance_matrix(partitions, marker_list, num_nodes):
     
     return allegiance_matrix
 
-def draw_graph_with_weights(G):
-    """Visualizes the graph with edge weights."""
-    pos = nx.spring_layout(G)
-    plt.figure(figsize=(8, 6))
-    nx.draw(G, pos, with_labels=True, node_color='lightblue', edge_color='gray', node_size=500, font_size=10)
-    edge_labels = {(i, j): f"{G[i][j]['weight']:.2f}" for i, j in G.edges()}
-    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_size=8)
-    plt.title("Graph Representation of Kinectome")
-    os.chdir('C:/Users/Karolina/Desktop/pykinectome/pykinectome/src/preprocessing')
-    plt.savefig('test_plot_graph.png', dpi=600)
-
-def draw_graph_with_selected_weights(G, selected_edges=None):
-    """
-    Visualizes the graph with edge weights for specified edges only.
-    
-    Parameters:
-    G (networkx.Graph): The graph to visualize
-    selected_edges (list): List of tuples (node1, node2) for which to display weights.
-                          If None, displays all weights.
-    """
-    pos = nx.spring_layout(G)
-    plt.figure(figsize=(8, 6))
-    
-    # Draw all nodes and edges
-    nx.draw(G, pos, with_labels=True, node_color='lightblue', 
-            edge_color='gray', node_size=500, font_size=10)
-    
-    # If no edges are specified, show all weights
-    if selected_edges is None:
-        edge_labels = {(i, j): f"{G[i][j]['weight']:.2f}" for i, j in G.edges()}
-    else:
-        # Filter for only the specified edges, ensuring they exist in the graph
-        edge_labels = {}
-        for node1, node2 in selected_edges:
-            # Check if edge exists (in either direction for undirected graphs)
-            if G.has_edge(node1, node2):
-                edge_labels[(node1, node2)] = f"{G[node1][node2]['weight']:.2f}"
-            elif G.has_edge(node2, node1):  # For undirected graphs
-                edge_labels[(node2, node1)] = f"{G[node2][node1]['weight']:.2f}"
-    
-    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_size=8)
-    plt.title("Graph Representation of Kinectome")
-    os.chdir('C:/Users/Karolina/Desktop/pykinectome/pykinectome/src/preprocessing')
-    plt.savefig('test_plot_graph.png', dpi=600)
 
 def all_allegiance_matrices_for_subject(kinectomes, marker_list):
     """ A function which saves allegiance matrices built from the kinectomes
