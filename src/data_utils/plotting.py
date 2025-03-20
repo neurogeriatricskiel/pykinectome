@@ -253,3 +253,50 @@ def draw_graph_with_selected_weights(G, selected_edges=None, result_base_path = 
 
     # Define the save path for the figure
     save_path = result_folder / f"graph_weights.png"
+
+def visualise_kinectome(kinectome, figname, marker_list, sub_id, task_name, kinematics, result_base_path):
+    """
+    Plots the kinectomes in AP, ML, and V directions with marker names as labels.
+    """
+
+    # Split left and right markers
+    left_markers = [m for m in marker_list if m.startswith('l_')]
+    right_markers = [m for m in marker_list if m.startswith('r_')]
+    middle_markers = ['head', 'ster']
+    
+    # Combine them in the desired order (left-side first, then right-side)
+    ordered_marker_list = middle_markers + left_markers + right_markers
+
+    plt.figure(figsize=(15, 5))
+    # Reorder the kinectome numpy array accordingly
+    marker_indices = [marker_list.index(m) for m in ordered_marker_list]
+    reordered_kinectome = kinectome[np.ix_(marker_indices, marker_indices, [0, 1, 2])]
+    
+    # Define vmin/vmax for each direction
+    min_value = np.min(reordered_kinectome)
+    
+    if min_value < 0:
+        scales = [(0.5, 1) if kinematics == 'pos' else (-1, 1), (-1, 1), (-1, 1)]
+   
+    else:
+        scales = [(0.5, 1) if kinematics == 'pos' else (0, 1), (0, 1), (0, 1)]
+
+    for i, matrix in enumerate(reordered_kinectome.transpose(2, 0, 1)):  # Iterate over 3 matrices
+        plt.subplot(1, 3, i + 1)  # Create subplot
+        sns.heatmap(matrix, cmap="coolwarm", vmin=scales[i][0], vmax=scales[i][1], square=True, cbar=True,
+                    xticklabels=ordered_marker_list, yticklabels=ordered_marker_list)  # Add labels
+        
+        plt.title(f"Correlation Matrix {['Anteroposterior', 'Mediolateral', 'Vertical'][i]}")
+    
+    plt.suptitle(f"{kinematics.upper()} kinectomes of {sub_id} during {task_name}")
+
+    result_folder = Path(result_base_path) / "kinectomes"
+
+    # Create the folder if it does not exist
+    result_folder.mkdir(parents=True, exist_ok=True)
+
+    # Define the save path for the figure
+    save_path = result_folder / f'{figname}'
+
+    plt.tight_layout()  # Adjust layout to prevent overlap
+    plt.savefig(save_path, dpi=600)
