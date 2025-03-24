@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from statsmodels.stats.dist_dependence_measures import distance_correlation
 from tqdm import tqdm
+from src.data_utils.plotting import visualise_kinectome
 
 def find_gait_cycles(base_path, data: pd.DataFrame, sub_id: str, task_name: str, run: str, linux: bool):
     """
@@ -185,10 +186,11 @@ def distance_correlation_matrix(data: pd.DataFrame, markers_list: list):
 
     return dcor
 
-def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: str, tracksys: str, kinematics: str, base_path, marker_list, 
+def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: str, tracksys: str, kinematics: str, base_path, result_base_path, marker_list, 
                         linux = False, 
                         dcor = False, 
-                        crosscorr=True):
+                        crosscorr=False,
+                        full_kinectomes = True):
     """
     Computes Pearson correlation matrices for marker positions in x, y, and z coordinates across gait cycles 
     and saves them as .npy files.
@@ -202,7 +204,8 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
     - base_path (str): Base directory where the kinectome data should be saved.
     - kinematics (str): Marker position or its derivatives (velocity, acceleration) used for calculating kinectomes.
     - linux (bool): Flag indicating whether the code is run on a Linux system.
-    - dcor (bool): Flag indicating whether to use distance correlation instead of Pearson correlation.
+    - dcor (bool): Flag indicating whether to use distance correlation.
+    - crosscorr (bool): Flag indicating whether to use time-lag corss correlation.
 
     Returns:
     - None: The function saves correlation matrices but does not return a value.
@@ -210,7 +213,7 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
 
     gait_cycles, start_onset = find_full_leftRight_cycles(base_path, data, sub_id, task_name, run)
     cycles_iterator = tqdm(gait_cycles, desc=f"---Subject: {sub_id}, Task: {task_name}---")
-    for i,cycles in enumerate(cycles_iterator): #range(len(gait_cycles)):
+    for i, cycles in enumerate(cycles_iterator): #range(len(gait_cycles)):
         cycle_indices = gait_cycles[i]
 
         gait_cycle_data = segment_data(data, cycle_indices)
@@ -235,23 +238,41 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
         # Subset and reorder dataframe
         gait_cycle_data = gait_cycle_data[ordered_columns]
 
-        # Initialize correlation matrices
-        num_markers = len(marker_names)
-        correlation_matrices = np.zeros((num_markers, num_markers, 3))
-        timelag_matrices = np.zeros((num_markers, num_markers, 3))
         
-        # Compute correlation for each coordinate (x, y, z)
-        for i, coord in enumerate([f'_{kinematics.upper()}_x', f'_{kinematics.upper()}_y', f'_{kinematics.upper()}_z']):
-            markers = [m + coord for m in marker_list]
+        # compute correlations for all coordinates (x AND y AND z)        
+        if full_kinectomes: 
+            num_markers = len(marker_names)       
+            all_markers = list(gait_cycle_data.columns)
+            correlation_matrix_full = np.zeros((num_markers*3, num_markers*3))
+            timelag_matrix_full = np.zeros((num_markers*3, num_markers*3))
+        
             if dcor:
-                correlation_matrices[:, :, i] = distance_correlation_matrix(gait_cycle_data[markers], markers)
+                correlation_matrix_full = distance_correlation_matrix(gait_cycle_data[all_markers], all_markers)
             elif crosscorr:
-                corr_lag_results = timelag_cross_correlation_matrix(gait_cycle_data[markers], markers)
-                correlation_matrices[:, :, i] = corr_lag_results[0]
-                timelag_matrices[:, :, i] = corr_lag_results[1]
+                corr_lag_results_full = timelag_cross_correlation_matrix(gait_cycle_data[all_markers], all_markers)
+                correlation_matrix_full = corr_lag_results_full[0]
+                timelag_matrix_full = corr_lag_results_full[1]
             else:
-                correlation_matrices[:, :, i] = gait_cycle_data[markers].corr(method='pearson', min_periods=1)
-     
+                correlation_matrix_full = np.array(gait_cycle_data[all_markers].corr(method='pearson', min_periods=1))
+        
+        else: # kinectomes for AP, ML and V directions separately
+            # Initialize correlation matrices
+            num_markers = len(marker_names)
+            correlation_matrices = np.zeros((num_markers, num_markers, 3))
+            timelag_matrices = np.zeros((num_markers, num_markers, 3))
+            
+            # Compute correlation for each coordinate (x, y, z)
+            for i, coord in enumerate([f'_{kinematics.upper()}_x', f'_{kinematics.upper()}_y', f'_{kinematics.upper()}_z']):
+                markers = [m + coord for m in marker_list]
+                if dcor:
+                    correlation_matrices[:, :, i] = distance_correlation_matrix(gait_cycle_data[markers], markers)
+                elif crosscorr:
+                    corr_lag_results = timelag_cross_correlation_matrix(gait_cycle_data[markers], markers)
+                    correlation_matrices[:, :, i] = corr_lag_results[0]
+                    timelag_matrices[:, :, i] = corr_lag_results[1]
+                else:
+                    correlation_matrices[:, :, i] = gait_cycle_data[markers].corr(method='pearson', min_periods=1)
+
         # directory to save 
         if linux:
             kinectome_path = f"{base_path}/derived_data/sub-{sub_id}/kinectomes"
@@ -262,54 +283,34 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
         if not os.path.exists(kinectome_path):
             os.makedirs(kinectome_path)
 
-        # Define file name (_pos_ for kinetomes of marker position data, vel - velocity, acc - acceleration)
-        if run: # 'run-off' or 'run-on' will appear in the kinectome file name
-            file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}.npy"
-        else: 
-            file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}.npy"
+
+        if full_kinectomes:
+            # Define file name (_pos_ for kinetomes of marker position data, vel - velocity, acc - acceleration)
+            if run: # 'run-off' or 'run-on' will appear in the kinectome file name
+                file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_full.npy"
+            else: 
+                file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_full.npy"
+        else:
+            # Define file name (_pos_ for kinetomes of marker position data, vel - velocity, acc - acceleration)
+            if run: # 'run-off' or 'run-on' will appear in the kinectome file name
+                file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}.npy"
+            else: 
+                file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}.npy"
         
         file_path = os.path.join(kinectome_path, file_name)
 
-        # visualise_kinectome(correlation_matrices, 'test_plot_kinectome_pres.png', marker_list, sub_id, task_name, kinematics)
-        print(f"Correlation_matrices shape: {correlation_matrices.shape}")
-        # Save kinectomes (as numpy array)
-        np.save(file_path, correlation_matrices)   
+        if full_kinectomes:
+            np.save(file_path, correlation_matrix_full) 
+        else:
+            visualise_kinectome(correlation_matrices, 'test_plot_kinectome_pres.png', marker_list, sub_id, task_name, kinematics, result_base_path)
+            print(f"Correlation_matrices shape: {correlation_matrices.shape}")
+            # Save kinectomes (as numpy array)
+            np.save(file_path, correlation_matrices)   
         
 
-def visualise_kinectome(kinectome, figname, marker_list, sub_id, task_name, kinematics):
-    """
-    Plots the kinectomes in AP, ML, and V directions with marker names as labels.
-    """
 
-    # Split left and right markers
-    left_markers = [m for m in marker_list if m.startswith('l_')]
-    right_markers = [m for m in marker_list if m.startswith('r_')]
-    middle_markers = ['head', 'ster']
-    
-    # Combine them in the desired order (left-side first, then right-side)
-    ordered_marker_list = middle_markers + left_markers + right_markers
 
-    plt.figure(figsize=(15, 5))
-    # Reorder the kinectome numpy array accordingly
-    marker_indices = [marker_list.index(m) for m in ordered_marker_list]
-    reordered_kinectome = kinectome[np.ix_(marker_indices, marker_indices, [0, 1, 2])]
-
-    # Define vmin/vmax for each direction
-    scales = [(0.5, 1) if kinematics == 'pos' else (0, 1), (0, 1), (0, 1)]
-
-    for i, matrix in enumerate(reordered_kinectome.transpose(2, 0, 1)):  # Iterate over 3 matrices
-        plt.subplot(1, 3, i + 1)  # Create subplot
-        sns.heatmap(matrix, cmap="coolwarm", vmin=scales[i][0], vmax=scales[i][1], square=True, cbar=True,
-                    xticklabels=ordered_marker_list, yticklabels=ordered_marker_list)  # Add labels
-        
-        plt.title(f"Correlation Matrix {['Anteroposterior', 'Mediolateral', 'Vertical'][i]}")
-    
-    plt.suptitle(f'{kinematics.upper()} kinectomes of {sub_id} during {task_name}')
-    os.chdir('C:/Users/Karolina/Desktop/pykinectome/pykinectome/src/preprocessing')
-    plt.tight_layout()  # Adjust layout to prevent overlap
-    plt.savefig(figname, dpi=600)
-
-def calculate_all_kinectomes(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, raw_data_path, fs, base_path, marker_list) -> None:
+def calculate_all_kinectomes(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, raw_data_path, fs, base_path, marker_list, result_base_path) -> None:
     """
     Calculates kinectomes for all subejcts. 
     This function iterates over a predefined list of subjects, tasks, tracking systems, and kinematic data types     
@@ -395,7 +396,7 @@ def calculate_all_kinectomes(diagnosis, kinematics_list, task_names, tracking_sy
                                 run = None         
 
                             # calculates the kinectomes in AP, ML and V directions and saves as .npy files
-                            calculate_kinectome(preprocessed_data, sub_id, task_name, run, tracksys, kinematics, base_path, marker_list)
+                            calculate_kinectome(preprocessed_data, sub_id, task_name, run, tracksys, kinematics, base_path, result_base_path, marker_list)
                         else:
                             print(f"No matching motion file found for sub-{sub_id}, task-{task_name}, tracksys-{tracksys}, run-{run}")
  
