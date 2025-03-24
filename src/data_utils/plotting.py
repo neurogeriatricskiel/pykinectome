@@ -1,13 +1,14 @@
 import numpy as np
 import seaborn as sns
 from pathlib import Path
-import matplotlib
-matplotlib.use('Agg')  # Use a non-interactive backend
+import matplotlib as mpl
+mpl.use('Agg')  # Use a non-interactive backend
 import matplotlib.pyplot as plt
 import scipy.cluster.hierarchy as sch
 from scipy.spatial.distance import squareform, pdist
 import networkx as nx
 import os
+from tqdm import tqdm
 
 def plot_avg_matrices(avg_group1, avg_group2, group1, group2, marker_list, task, direction, matrix_type, result_base_path, rho, p_value):
     " Plots the average or std of the kinectomes based on task and direction"
@@ -300,3 +301,168 @@ def visualise_kinectome(kinectome, figname, marker_list, sub_id, task_name, kine
 
     plt.tight_layout()  # Adjust layout to prevent overlap
     plt.savefig(save_path, dpi=600)
+
+
+
+def plot_cc(DATA_PATH,sub_id,task_name,tracksys,run,kinematics,MARKER_LIST,threshold_list=[0.2,0.4,0.6,0.8]):
+    from src.data_utils import data_loader
+    from src.graph_utils.kinectome2graph import build_graph, clustering_coef
+
+    fig, axs = plt.subplots(3,len(threshold_list), figsize=(15, 15))
+    # load the kinectomes
+    kinectomes = data_loader.load_kinectomes(DATA_PATH, sub_id, task_name,tracksys,run,kinematics)
+    print(f"{kinematics},{task_name}: \n\n Number of events is {len(kinectomes)}")
+
+    for i, limit in enumerate(threshold_list):
+        # direction dict, as order of build_graph
+        directions_dict = {"AP": [], "ML": [], "V":[]} 
+        for k in kinectomes:
+            graphs = build_graph(k,MARKER_LIST,limit)
+            for idx, direction in enumerate(["AP", "ML", "V"]):
+                G = graphs[idx]
+                # calculate the clustering coef 
+                cc_dict = clustering_coef(G)
+                directions_dict[direction].append(cc_dict)
+
+        for j,idx in enumerate(["AP", "ML", "V"]):
+            merged_ = data_loader.merge_dicts(directions_dict[idx])
+            axs[j,i].boxplot(merged_.values(), vert=False, showfliers=False)
+            axs[j,i].set_yticklabels(merged_.keys())
+            axs[j,i].set_xlabel("clustering coefficient")
+            axs[j,i].set_ylabel("Markers")
+            axs[j,i].set_title(f"{idx}_{limit}") 
+    for ax in axs.flat:
+        ax.label_outer()
+    save_path = f"{DATA_PATH}/plots"
+    # Ensure directory exists
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+    fig.suptitle(f"{kinematics} {task_name} {sub_id} ") 
+
+    fig.savefig(f"{save_path}/{sub_id}_{kinematics}_{task_name}-cc.png")
+
+
+
+def event_plot_cc(DATA_PATH,sub_id,task_name,tracksys,run,kinematics,MARKER_LIST,threshold_list=[0.2,0.4,0.6,0.8],direction=0):
+    from src.data_utils import data_loader
+    from src.graph_utils.kinectome2graph import build_graph, clustering_coef
+
+    if direction == 0:
+        idx = "AP"
+    elif direction == 1:
+        idx = "ML"
+    elif direction == 2:
+        idx = "V"
+    # load the kinectomes
+    kinectomes = data_loader.load_kinectomes(DATA_PATH, sub_id, task_name,tracksys,run,kinematics)
+    if not kinectomes:
+        print(f"Warning: No kinectome found for subject {sub_id}, task {task_name} during run-{run}. Skipping...")
+    else:
+        fig = plt.figure(figsize=(8, 8))
+        cmap = mpl.cm.get_cmap("Spectral")
+        events_iterator = tqdm(threshold_list, desc=f"---Subject: {kinematics}, Direction: {idx}, Task: {task_name}---")
+        ax = None
+        for n, limit in enumerate(events_iterator):
+            ax = plt.subplot(1,len(threshold_list),n+1, frameon=False, sharex=ax)
+            directions_dict = {idx: []}
+            for k in kinectomes:
+                graphs = build_graph(k,MARKER_LIST,limit)
+                G = graphs[direction]
+                # calculate the clustering coef 
+                cc_dict = clustering_coef(G)
+                directions_dict[idx].append(cc_dict)
+            
+            merged_ = data_loader.merge_dicts(directions_dict[idx])
+            for i, k in enumerate(merged_.keys()):
+                Y = np.array(merged_[k])
+                X = np.arange(len(Y))
+                ax.plot(X,Y+i,color="k",zorder=100-i)
+                color = cmap(i / 22)
+                ax.fill_between(X,Y + i, i, color=color, zorder=100 - i)
+            
+            if n == 0:
+                ax.yaxis.set_tick_params(labelleft=True)
+                ax.set_yticks(np.arange(len(merged_.keys())))
+                ax.set_yticklabels([f"{k}" for k in merged_.keys()],verticalalignment="bottom")
+            else:
+                ax.yaxis.set_tick_params(labelleft=False)
+
+            ax.text(
+            0.0,
+            1.0,
+            f"Threshold {limit}",
+            ha="left",
+            va="top",
+            weight="bold",
+            transform=ax.transAxes,
+            )
+        plt.tight_layout()
+        save_path = f"{DATA_PATH}/plots"
+        # Ensure directory exists
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+
+        fig.savefig(f"{save_path}/{sub_id}_{kinematics}_{idx}_{task_name}-curve_event.png")
+
+
+def event_plot_components(DATA_PATH,sub_id,task_name,tracksys,run,kinematics,MARKER_LIST,threshold_list=[0.2,0.4,0.6,0.8],direction=1):
+    from src.data_utils import data_loader
+    from src.graph_utils.kinectome2graph import build_graph, clustering_coef, cc_connected_components
+
+    if direction == 0:
+        idx = "AP"
+    elif direction == 1:
+        idx = "ML"
+    elif direction == 2:
+        idx = "V"
+    # load the kinectomes
+    kinectomes = data_loader.load_kinectomes(DATA_PATH, sub_id, task_name,tracksys,run,kinematics)
+    if not kinectomes:
+        print(f"Warning: No kinectome found for subject {sub_id}, task {task_name} during run-{run}. Skipping...")
+    else:
+        fig = plt.figure(figsize=(8, 8))
+        cmap = mpl.cm.get_cmap("Spectral")
+        events_iterator = tqdm(kinectomes, desc=f"---Subject: {kinematics}, Direction: {idx}, Task: {task_name}---")
+        ax = None
+        for n, k in enumerate(events_iterator):
+            ax = plt.subplot(1,len(kinectomes),n+1, frameon=False, sharex=ax)
+            directions_dict = {idx: []}
+            for j, limit in enumerate(threshold_list):
+                graphs = build_graph(k,MARKER_LIST,limit)
+                G = graphs[direction]
+                # calculate the clustering coef 
+                cc = cc_connected_components(G)
+                directions_dict[idx].append(len(cc))
+            
+            # merged_ = data_loader.merge_dicts(directions_dict[idx])
+            for i, k in enumerate(directions_dict.keys()):
+                Y = np.array(directions_dict[k])
+                X = np.array(threshold_list)
+                ax.plot(X,Y+i,color="k",zorder=100-i)
+                color = cmap(i / 22)
+                ax.fill_between(X,Y + i, i, color=color, zorder=100 - i)
+            
+            if n == 0:
+                ax.yaxis.set_tick_params(labelleft=True)
+                # ax.set_yticks(np.arange(len(kinectomes)))
+                ax.set_yticks(np.arange(10))
+                # ax.set_yticklabels([f"Event {n}" for n in range(1,len(kinectomes) + 1 )],verticalalignment="bottom")
+            else:
+                ax.yaxis.set_tick_params(labelleft=False)
+
+            ax.text(
+            0.0,
+            1.0,
+            f"Event {n}",
+            ha="left",
+            va="top",
+            weight="bold",
+            transform=ax.transAxes,
+            )
+        plt.tight_layout()
+        save_path = f"{DATA_PATH}/plots"
+        # Ensure directory exists
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+
+        fig.savefig(f"{save_path}/{sub_id}_{kinematics}_{idx}_{task_name}-connected-components.png")
