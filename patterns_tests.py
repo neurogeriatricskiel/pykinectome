@@ -1,4 +1,5 @@
-# Description: This script is used to calculate the clustering coefficient of the kinectome
+
+# Description: This script is used to test pattern extraction in the kinectome data
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import os
@@ -8,10 +9,8 @@ from src.data_utils import data_loader
 from src.kinectome import *
 from src.preprocessing import preprocessing
 from src.graph_utils.kinectome2graph import build_graph, clustering_coef, cc_connected_components
-from src.data_utils.plotting import plot_cc, event_plot_cc, event_plot_components
+from src.graph_utils.kinectome2pattern import full_subgraph, path_subgraph, cycle_subgraph
 from tqdm import tqdm
-
-
 
 
 
@@ -23,7 +22,7 @@ if __name__ == "__main__":
     DATA_PATH = "/home/prdc/Dokumente/Projects-KI/uksh"
     # Seleted tasks
     TASK_NAMES = [
-    "walkFast", "walkSlow", "walkPreferred" 
+    "walkSlow"
     ]
     TRACKING_SYSTEMS = ["omc"]
     # values to be extracted 
@@ -34,17 +33,25 @@ if __name__ == "__main__":
                 'l_asis', 'l_psis', 'r_asis', 'r_psis', 
                 'l_th', 'r_th', 'l_sk', 'r_sk', 
                 'l_ank', 'r_ank', 'l_toe', 'r_toe']
+    MARKER_SUB_LIST = ['head', 'ster',  'r_sho',  
+                 'r_elbl', 'r_wrist', 'r_hand']
     run = None # dont have id "run" in sample data that I have 
     FS = 200 # sampling rate
     sub_ids = ["pp002"] 
-
-    threshold_list = [0.2,0.4,0.6,0.8]
 
     for sub_id in sub_ids:
         for kinematics in KINEMATICS:
             for task_name in TASK_NAMES:
                 for tracksys in TRACKING_SYSTEMS:
-                    # plot_cc(DATA_PATH,sub_id,task_name,tracksys,run,kinematics,MARKER_LIST,threshold_list)
-                    for direction in [0,1,2]:
-                        event_plot_cc(DATA_PATH,sub_id,task_name,tracksys,run,kinematics,MARKER_LIST,threshold_list,direction)
-                        # event_plot_components(DATA_PATH,sub_id,task_name,tracksys,run,kinematics,MARKER_LIST,threshold_list,direction)
+                    kinectomes = data_loader.load_kinectomes(DATA_PATH, sub_id, task_name,tracksys,run,kinematics)   
+                    for k in kinectomes:
+                        G_directions = build_graph(k, MARKER_LIST) # list of graphs
+                        directions_iterator = tqdm(G_directions, desc=f"---Subject: {sub_id}, Task: {task_name}---")
+                        for i,g in enumerate(directions_iterator):
+                            # full subgraph
+                            # subgraph = full_subgraph(g, MARKER_SUB_LIST)
+                            # path subgraph
+                            # subgraph = path_subgraph(g, MARKER_SUB_LIST)
+                            # cycle subgraph
+                            subgraph = cycle_subgraph(g, MARKER_SUB_LIST)
+
