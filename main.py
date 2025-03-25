@@ -48,6 +48,10 @@ MARKER_LIST = ['head', 'ster', 'l_sho', 'r_sho',
                 'l_ank', 'r_ank', 'l_toe', 'r_toe']
 DIAGNOSIS = ['diagnosis_parkinson'] # a list of diagnoses of interest
 
+FULL = True # True or False depending if full kinectome (all three directions in one kinectome) should be analysed
+
+CORRELATION = 'pears' # 'cross' or 'dcor' are the other options, depending on which correlation methods should be used for building the kinectomes
+
 PD_ON = ['pp065', 'pp032'] # a list of sub_ids of PD that were measured in on condition
 
 # path where the results of modularity analysis (std within subjects (csv), avg subject allegiance matrices (pkl) are stored)
@@ -56,17 +60,15 @@ RESULT_BASE_PATH = 'C:/Users/Karolina/Desktop/pykinectome/results'
 def main() -> None:
     
     # can be done once since it saves the kinectomes as .npy files in the derived_data 
-    kinectome.calculate_all_kinectomes(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, RAW_DATA_PATH, FS, BASE_PATH, MARKER_LIST) 
+    # kinectome.calculate_all_kinectomes(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, RAW_DATA_PATH, FS, BASE_PATH, MARKER_LIST, RESULT_BASE_PATH, FULL) 
     
     # investigate kinectome characterisstics (mean and standard deviation of the kinectomes)
     # uses permutation analysis (Spearman's rho) to check if the matrices correlate with one another 
     # kinectome_characteristics.compare_between_groups(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST, RESULT_BASE_PATH)
 
 
-    # use True or False for visualise variable to have allegiance matrices visualised (or not)
-    # use True or False for analysing variability within subject allegiance matrices (saved as csv files after one run)
-    # use True or False for computing the average allegiance matrices per person, per speed and per direction (saved as pkl files after one run)
-    # modularity.modularity_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST, RESULT_BASE_PATH)
+
+    modularity.modularity_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST, RESULT_BASE_PATH, FULL, CORRELATION)
                             
                             #    analyse_intra_sub = False, visualise=False, 
                                
