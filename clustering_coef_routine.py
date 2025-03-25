@@ -48,3 +48,4 @@ if __name__ == "__main__":
                     for direction in [0,1,2]:
                         event_plot_cc(DATA_PATH,sub_id,task_name,tracksys,run,kinematics,MARKER_LIST,threshold_list,direction)
                         # event_plot_components(DATA_PATH,sub_id,task_name,tracksys,run,kinematics,MARKER_LIST,threshold_list,direction)
+
