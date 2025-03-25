@@ -15,9 +15,21 @@ from src.data_utils import permutation
 from src.data_utils.plotting import draw_graph_with_selected_weights, draw_graph_with_weights
 
 def build_graph(kinectome, marker_list):
-    """Builds weighted graphs for AP, ML, V directions while preserving meaningful negative correlations."""
+    """Builds weighted graphs for AP, ML, V directions if ndim==2, 
+    else builds one graph for the full kinectome (containins all directions)     
+    while preserving meaningful negative correlations."""
+    
+    # np.expand_dims
+    # kinectome = kinectome[..., None] if kinectome.ndim == 2 else kinectome
+    directions = ['AP', 'ML', 'V']
+    marker_list = (
+                    [f"{m}_{d}" for m in marker_list for d in directions] if kinectome.ndim == 2 else marker_list
+                    )
+    kinectome = np.expand_dims(kinectome, axis=-1) if kinectome.ndim == 2 else kinectome
+     
+    
     graphs = []
-    for direction in range(kinectome.shape[2]):
+    for direction in range(kinectome.shape[-1]):
         G = nx.Graph()
         num_nodes = kinectome.shape[0]
         min_weight = np.min(kinectome[:, :, direction])
@@ -92,7 +104,7 @@ def all_allegiance_matrices_for_subject(kinectomes, marker_list):
 
 
 
-def modularity_analysis(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list, result_path):
+def modularity_analysis(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list, result_path, full):
 
     disease_sub_ids, matched_control_sub_ids = groups.define_groups(diagnosis)
 
@@ -141,7 +153,7 @@ def modularity_analysis(diagnosis, kinematics_list, task_names, tracking_systems
                         else:
                             run = run
                         
-                        kinectomes = load_kinectomes(base_path, sub_id, task_name, tracksys, run, kinematics)
+                        kinectomes = load_kinectomes(base_path, sub_id, task_name, tracksys, run, kinematics, full)
 
                         if kinectomes is None:
                             continue
@@ -195,7 +207,7 @@ def modularity_analysis(diagnosis, kinematics_list, task_names, tracking_systems
     with open(std_save_path, "wb") as f:
         pickle.dump(all_std_allegiance, f)
 
-def load_allegiance_matrices(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list, result_path):
+def load_allegiance_matrices(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list, result_path, full):
     """ checks if the allegiance matrices are calculated and saved as a pickle file (and loads them). 
     otherwise calculates them and saves as a pickle file
 
@@ -214,7 +226,7 @@ def load_allegiance_matrices(diagnosis, kinematics_list, task_names, tracking_sy
     
     # if allegiance matrices are not calculated
     if not avg_save_path.exists() and not std_save_path.exists():
-        modularity_analysis(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list, result_path)
+        modularity_analysis(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list, result_path, full)
         # load the allegiane matrices once they are calculated
         with open (avg_save_path, 'rb') as avg_file:
             avg_allegience_matrices = pickle.load(avg_file)
@@ -309,12 +321,12 @@ def plot_all_allegiance_matrices(allegiance_matrices, marker_list, result_base_p
                     plotting.visualise_allegiance_matrix(matrix, marker_list, group, task, kinematic, direction, result_base_path)
 
 
-def modularity_main(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list, result_base_path):
+def modularity_main(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list, result_base_path, full, correlation_method):
     
     
     avg_subject_allegience_matrices, std_subject_allegience_matrices = load_allegiance_matrices(diagnosis, kinematics_list, task_names, 
                                                                                 tracking_systems, runs, pd_on, base_path,
-                                                                                marker_list, result_base_path)
+                                                                                marker_list, result_base_path, full)
     
 
     average_group_allegiance_matrices = calculate_avg_allg_mtrx(avg_subject_allegience_matrices)
