@@ -186,11 +186,12 @@ def distance_correlation_matrix(data: pd.DataFrame, markers_list: list):
 
     return dcor
 
-def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: str, tracksys: str, kinematics: str, base_path, result_base_path, marker_list, 
+def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: str, tracksys: str, kinematics: str, base_path: str, result_base_path: str, marker_list: list, 
+                        full_kinectomes, 
                         linux = False, 
                         dcor = False, 
-                        crosscorr=False,
-                        full_kinectomes = True):
+                        crosscorr=False
+                        ):
     """
     Computes Pearson correlation matrices for marker positions in x, y, and z coordinates across gait cycles 
     and saves them as .npy files.
@@ -210,6 +211,10 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
     Returns:
     - None: The function saves correlation matrices but does not return a value.
     """
+
+    # Input checks
+    if dcor + crosscorr > 1:
+        raise ValueError('Only one type of correlation should be set to true!')
 
     gait_cycles, start_onset = find_full_leftRight_cycles(base_path, data, sub_id, task_name, run)
     cycles_iterator = tqdm(gait_cycles, desc=f"---Subject: {sub_id}, Task: {task_name}---")
@@ -252,7 +257,7 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
                 corr_lag_results_full = timelag_cross_correlation_matrix(gait_cycle_data[all_markers], all_markers)
                 correlation_matrix_full = corr_lag_results_full[0]
                 timelag_matrix_full = corr_lag_results_full[1]
-            else:
+            else: # default
                 correlation_matrix_full = np.array(gait_cycle_data[all_markers].corr(method='pearson', min_periods=1))
         
         else: # kinectomes for AP, ML and V directions separately
@@ -270,7 +275,7 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
                     corr_lag_results = timelag_cross_correlation_matrix(gait_cycle_data[markers], markers)
                     correlation_matrices[:, :, i] = corr_lag_results[0]
                     timelag_matrices[:, :, i] = corr_lag_results[1]
-                else:
+                else: # default
                     correlation_matrices[:, :, i] = gait_cycle_data[markers].corr(method='pearson', min_periods=1)
 
         # directory to save 
@@ -287,22 +292,42 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
         if full_kinectomes:
             # Define file name (_pos_ for kinetomes of marker position data, vel - velocity, acc - acceleration)
             if run: # 'run-off' or 'run-on' will appear in the kinectome file name
-                file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_full.npy"
+                if dcor:
+                    file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_dcor_full.npy"
+                elif crosscorr:
+                    file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_cross_full.npy"
+                else:
+                    file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_pears_full.npy"
             else: 
-                file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_full.npy"
+                if dcor:
+                    file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_dcor_full.npy"
+                elif crosscorr:
+                    file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_cross_full.npy"
+                else:
+                    file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_pears_full.npy"
         else:
             # Define file name (_pos_ for kinetomes of marker position data, vel - velocity, acc - acceleration)
             if run: # 'run-off' or 'run-on' will appear in the kinectome file name
-                file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}.npy"
+                if dcor:
+                    file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_dcor.npy"
+                elif crosscorr:
+                    file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_cross.npy"
+                else:
+                    file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_pears.npy"
             else: 
-                file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}.npy"
+                if dcor:
+                    file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_dcor.npy"
+                elif crosscorr:
+                    file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_cross.npy"
+                else:
+                    file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_pears.npy"
         
         file_path = os.path.join(kinectome_path, file_name)
 
         if full_kinectomes:
             np.save(file_path, correlation_matrix_full) 
         else:
-            visualise_kinectome(correlation_matrices, 'test_plot_kinectome_pres.png', marker_list, sub_id, task_name, kinematics, result_base_path)
+            # visualise_kinectome(correlation_matrices, 'test_plot_kinectome_pres.png', marker_list, sub_id, task_name, kinematics, result_base_path)
             print(f"Correlation_matrices shape: {correlation_matrices.shape}")
             # Save kinectomes (as numpy array)
             np.save(file_path, correlation_matrices)   
@@ -310,7 +335,7 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
 
 
 
-def calculate_all_kinectomes(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, raw_data_path, fs, base_path, marker_list, result_base_path) -> None:
+def calculate_all_kinectomes(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, raw_data_path, fs, base_path, marker_list, result_base_path, full) -> None:
     """
     Calculates kinectomes for all subejcts. 
     This function iterates over a predefined list of subjects, tasks, tracking systems, and kinematic data types     
@@ -396,7 +421,7 @@ def calculate_all_kinectomes(diagnosis, kinematics_list, task_names, tracking_sy
                                 run = None         
 
                             # calculates the kinectomes in AP, ML and V directions and saves as .npy files
-                            calculate_kinectome(preprocessed_data, sub_id, task_name, run, tracksys, kinematics, base_path, result_base_path, marker_list)
+                            calculate_kinectome(preprocessed_data, sub_id, task_name, run, tracksys, kinematics, base_path, result_base_path, marker_list, full)
                         else:
                             print(f"No matching motion file found for sub-{sub_id}, task-{task_name}, tracksys-{tracksys}, run-{run}")
  
