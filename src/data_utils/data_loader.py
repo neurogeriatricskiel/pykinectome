@@ -56,17 +56,23 @@ def load_events(base_path, sub_id, task_name, run):
 
     return events
 
-def load_kinectomes(base_path, sub_id, task_name, tracksys, run, kinematics):
+def load_kinectomes(base_path, sub_id, task_name, tracksys, run, kinematics, full):
     """Loads kinectome files and sorts them by onset indices."""
     try:
         os.chdir(f'{base_path}/derived_data/sub-{sub_id}/kinectomes')
         file_list = os.listdir()
         
         # run 'on' or 'off' only exists in the file names of pwPD 
-        if run:
-            relevant_files = [file for file in file_list if all(x in file for x in [task_name, tracksys, run, kinematics])]
-        else:
-            relevant_files = [file for file in file_list if all(x in file for x in [task_name, tracksys, kinematics])]
+        if run:            
+            if full:
+                relevant_files = [file for file in file_list if all(x in file for x in [task_name, tracksys, run, kinematics, 'full'])]
+            else:
+                relevant_files = [file for file in file_list if all(x in file for x in [task_name, tracksys, run, kinematics])]
+        else:            
+            if full:
+                relevant_files = [file for file in file_list if all(x in file for x in [task_name, tracksys, kinematics, 'full'])]
+            else:
+                relevant_files = [file for file in file_list if all(x in file for x in [task_name, tracksys, kinematics])]
         
         sorted_files = sorted(relevant_files, key=lambda file: extract_onset_indices(file)[0])
         
