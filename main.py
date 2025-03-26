@@ -48,9 +48,9 @@ MARKER_LIST = ['head', 'ster', 'l_sho', 'r_sho',
                 'l_ank', 'r_ank', 'l_toe', 'r_toe']
 DIAGNOSIS = ['diagnosis_parkinson'] # a list of diagnoses of interest
 
-FULL = True # True or False depending if full kinectome (all three directions in one kinectome) should be analysed
+FULL = False # True or False depending if full kinectome (all three directions in one kinectome) should be analysed
 
-CORRELATION = 'pears' # 'cross' or 'dcor' are the other options, depending on which correlation methods should be used for building the kinectomes
+CORRELATION = 'dcor' # 'cross' or 'dcor' are the other options, depending on which correlation methods should be used for building the kinectomes
 
 PD_ON = ['pp065', 'pp032'] # a list of sub_ids of PD that were measured in on condition
 
