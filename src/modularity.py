@@ -14,7 +14,8 @@ from pathlib import Path
 from src.data_utils import permutation
 from src.data_utils.plotting import draw_graph_with_selected_weights, draw_graph_with_weights
 
-def build_graph(kinectome, marker_list):
+def build_graph(kinectome, marker_list, bound_value=None):
+
     """Builds weighted graphs for AP, ML, V directions if ndim==2, 
     else builds one graph for the full kinectome (containins all directions)     
     while preserving meaningful negative correlations."""
@@ -42,8 +43,12 @@ def build_graph(kinectome, marker_list):
         for i in range(num_nodes):
             for j in range(i + 1, num_nodes):
                 weight = kinectome[i, j, direction] + shift  # Apply shift
-                if not np.isnan(weight):
-                    G.add_edge(marker_list[i], marker_list[j], weight=weight)
+                if bound_value is None:
+                    if not np.isnan(weight):
+                        G.add_edge(marker_list[i], marker_list[j], weight=weight)
+                else: # Apply threshold
+                    if not np.isnan(weight) and weight >= bound_value:
+                        G.add_edge(marker_list[i], marker_list[j], weight=weight)
         
         graphs.append(G)
     
