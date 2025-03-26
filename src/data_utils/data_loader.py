@@ -67,12 +67,12 @@ def load_kinectomes(base_path, sub_id, task_name, tracksys, run, kinematics, ful
             if full:
                 relevant_files = [file for file in file_list if all(x in file for x in [task_name, tracksys, run, kinematics, correlation_method, 'full'])]
             else:
-                relevant_files = [file for file in file_list if all(x in file for x in [task_name, tracksys, run, kinematics, correlation_method])]
+                relevant_files = [file for file in file_list if all(x in file for x in [task_name, tracksys, run, kinematics, correlation_method]) and 'full' not in file]
         else:            
             if full:
                 relevant_files = [file for file in file_list if all(x in file for x in [task_name, tracksys, kinematics, correlation_method, 'full'])]
             else:
-                relevant_files = [file for file in file_list if all(x in file for x in [task_name, tracksys, kinematics, correlation_method])]
+                relevant_files = [file for file in file_list if all(x in file for x in [task_name, tracksys, kinematics, correlation_method]) and 'full' not in file]
         
         sorted_files = sorted(relevant_files, key=lambda file: extract_onset_indices(file)[0])
         
