@@ -215,6 +215,9 @@ def draw_graph_with_weights(G, result_base_path = 'C:/Users/Karolina/Desktop/pyk
     # Define the save path for the figure
     save_path = result_folder / f"graph_all_weights.png"
 
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')  
+
+
 def draw_graph_with_selected_weights(G, selected_edges=None, result_base_path = 'C:/Users/Karolina/Desktop/pykinectome/results'):
     """
     Visualizes the graph with edge weights for specified edges only.
@@ -254,6 +257,8 @@ def draw_graph_with_selected_weights(G, selected_edges=None, result_base_path = 
 
     # Define the save path for the figure
     save_path = result_folder / f"graph_weights.png"
+
+    plt.savefig(save_path, dpi=600)
 
 def visualise_kinectome(kinectome, figname, marker_list, sub_id, task_name, kinematics, result_base_path):
     """
@@ -343,7 +348,7 @@ def plot_cc(DATA_PATH,sub_id,task_name,tracksys,run,kinematics,MARKER_LIST,thres
 
 
 
-def event_plot_cc(DATA_PATH,sub_id,task_name,tracksys,run,kinematics,MARKER_LIST,threshold_list=[0.2,0.4,0.6,0.8],direction=0):
+def event_plot_cc(DATA_PATH,sub_id,task_name,tracksys,run,kinematics,MARKER_LIST,threshold_list,direction, full, correlation_method):
     from src.data_utils import data_loader
     from src.graph_utils.kinectome2graph import build_graph, clustering_coef
 
@@ -353,8 +358,10 @@ def event_plot_cc(DATA_PATH,sub_id,task_name,tracksys,run,kinematics,MARKER_LIST
         idx = "ML"
     elif direction == 2:
         idx = "V"
+    elif direction == 'full':
+        idx = 'full'
     # load the kinectomes
-    kinectomes = data_loader.load_kinectomes(DATA_PATH, sub_id, task_name,tracksys,run,kinematics)
+    kinectomes = data_loader.load_kinectomes(DATA_PATH, sub_id, task_name,tracksys,run,kinematics, full, correlation_method)
     if not kinectomes:
         print(f"Warning: No kinectome found for subject {sub_id}, task {task_name} during run-{run}. Skipping...")
     else:
@@ -367,7 +374,7 @@ def event_plot_cc(DATA_PATH,sub_id,task_name,tracksys,run,kinematics,MARKER_LIST
             directions_dict = {idx: []}
             for k in kinectomes:
                 graphs = build_graph(k,MARKER_LIST,limit)
-                G = graphs[direction]
+                G = graphs[direction] if isinstance(direction, int) else graphs[0] # full kinectome has only one element in graphs
                 # calculate the clustering coef 
                 cc_dict = clustering_coef(G)
                 directions_dict[idx].append(cc_dict)
@@ -377,13 +384,14 @@ def event_plot_cc(DATA_PATH,sub_id,task_name,tracksys,run,kinematics,MARKER_LIST
                 Y = np.array(merged_[k])
                 X = np.arange(len(Y))
                 ax.plot(X,Y+i,color="k",zorder=100-i)
-                color = cmap(i / 22)
+                # color = cmap(i / 22)
+                color=cmap(cc_dict[k]) # colour coding the plot based on connectivity
                 ax.fill_between(X,Y + i, i, color=color, zorder=100 - i)
             
             if n == 0:
                 ax.yaxis.set_tick_params(labelleft=True)
-                ax.set_yticks(np.arange(len(merged_.keys())))
-                ax.set_yticklabels([f"{k}" for k in merged_.keys()],verticalalignment="bottom")
+                ax.set_yticks(np.arange(len(merged_.keys())) + 0.5)
+                ax.set_yticklabels([f"{k}" for k in merged_.keys()],verticalalignment="center")
             else:
                 ax.yaxis.set_tick_params(labelleft=False)
 
@@ -402,7 +410,7 @@ def event_plot_cc(DATA_PATH,sub_id,task_name,tracksys,run,kinematics,MARKER_LIST
         if not os.path.exists(save_path):
             os.makedirs(save_path)
 
-        fig.savefig(f"{save_path}/{sub_id}_{kinematics}_{idx}_{task_name}-curve_event.png")
+        fig.savefig(f"{save_path}/{sub_id}_run-{run}_{kinematics}_{idx}_{task_name}-curve_event.png")
 
 
 def event_plot_components(DATA_PATH,sub_id,task_name,tracksys,run,kinematics,MARKER_LIST,threshold_list=[0.2,0.4,0.6,0.8],direction=1):
@@ -465,4 +473,4 @@ def event_plot_components(DATA_PATH,sub_id,task_name,tracksys,run,kinematics,MAR
         if not os.path.exists(save_path):
             os.makedirs(save_path)
 
-        fig.savefig(f"{save_path}/{sub_id}_{kinematics}_{idx}_{task_name}-connected-components.png")
+        fig.savefig(f"{save_path}/{sub_id}_run{run}_{kinematics}_{idx}_{task_name}-connected-components.png")
