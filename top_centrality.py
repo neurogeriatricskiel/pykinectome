@@ -9,7 +9,7 @@ import networkx as nx
 from src.data_utils import data_loader
 from src.kinectome import *
 from src.preprocessing import preprocessing
-from src.data_utils.kinecome2graph import build_graph, weighted_degree_centrality
+from src.graph_utils.kinectome2graph import build_graph, weighted_degree_centrality
 
 
 
@@ -35,9 +35,12 @@ if __name__ == "__main__":
                 'l_ank', 'r_ank', 'l_toe', 'r_toe']
     run = None # dont have id "run" in sample data that I have 
     FS = 200 # sampling rate
-    sub_ids = ["pp085"] # I have only this data 
+    sub_ids = ["pp011"] # I have only this data 
+    FULL = True
 
-    GEN_KINECTOMES = True # generate the kinectomes in first run 
+    CORRELATION = 'pears' 
+
+    GEN_KINECTOMES = False # generate the kinectomes in first run 
 
     if GEN_KINECTOMES:
         for sub_id in sub_ids:
@@ -65,19 +68,24 @@ if __name__ == "__main__":
             for task_name in TASK_NAMES:
                 for tracksys in TRACKING_SYSTEMS:
                         # load the kinectomes
-                        kinectomes = data_loader.load_kinectomes(DATA_PATH, sub_id, task_name,tracksys,run,kinematics)
+                        kinectomes = data_loader.load_kinectomes(DATA_PATH, sub_id, task_name,tracksys,run,kinematics, FULL, CORRELATION)
                         print(f"{kinematics},{task_name}: \n\n Number of events is {len(kinectomes)}")
 
                         # direction dict, as order of build_graph
-                        directions_dict = {"AP": [], "ML": [], "V":[]} 
+                        directions_dict = {"AP": [], "ML": [], "V":[], 'Full':[]} 
                         for k in kinectomes:
                             graphs = build_graph(k,MARKER_LIST)
-                            for idx, direction in enumerate(["AP", "ML", "V"]):
+                            
+                            # check if there are three kinectomes in AP, ML, V directions, or one complete kinectome
+                            available_directions = ["AP", "ML", "V"] if len(graphs) == 3 else ["Full"]
+                            for idx, direction in enumerate(available_directions):
                                 G = graphs[idx]
                                 # calculate the centrality measures
                                 centrality_dict = weighted_degree_centrality(G)
                                 directions_dict[direction].append(centrality_dict)
 
+                        ## TO DO:
+                        # adjust the plotting functions so they work for the full graph as well 
                         for idx in ["AP", "ML", "V"]:
                             merged_ = data_loader.merge_dicts(directions_dict[idx])
                             fig, ax = plt.subplots()
