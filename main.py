@@ -11,6 +11,7 @@ import sys
 import pandas as pd
 import src
 import os
+import top_centrality
 
 if sys.platform == "linux":
     RAW_DATA_PATH = Path(
@@ -53,10 +54,14 @@ PD_ON = ['pp065', 'pp032'] # a list of sub_ids of PD that were measured in on co
 # path where the results of modularity analysis (std within subjects (csv), avg subject allegiance matrices (pkl) are stored)
 RESULT_BASE_PATH = 'C:/Users/Karolina/Desktop/pykinectome/results'
 
+FULL = False
+
+CORRELATION = 'pears'
+
 def main() -> None:
     
     # can be done once since it saves the kinectomes as .npy files in the derived_data 
-    kinectome.calculate_all_kinectomes(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, RAW_DATA_PATH, FS, BASE_PATH, MARKER_LIST) 
+    # kinectome.calculate_all_kinectomes(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, RAW_DATA_PATH, FS, BASE_PATH, MARKER_LIST) 
     
     # investigate kinectome characterisstics (mean and standard deviation of the kinectomes)
     # uses permutation analysis (Spearman's rho) to check if the matrices correlate with one another 
@@ -71,9 +76,8 @@ def main() -> None:
                             #    analyse_intra_sub = False, visualise=False, 
                                
                             #    avg_per_speed_computed = False, result_path = RESULT_BASE_PATH)
-    centrality.centrality_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST, RESULT_BASE_PATH)
+    centrality.centrality_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST, RESULT_BASE_PATH, FULL, CORRELATION)
 
-    
 
     return
 
