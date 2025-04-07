@@ -190,7 +190,7 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
                         full_kinectomes, 
                         linux = False, 
                         dcor = False, 
-                        crosscorr=False
+                        crosscorr=True
                         ):
     """
     Computes Pearson correlation matrices for marker positions in x, y, and z coordinates across gait cycles 
@@ -296,6 +296,7 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
                     file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_dcor_full.npy"
                 elif crosscorr:
                     file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_cross_full.npy"
+                    file_name_timeLag = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_time_lag_full.npy"         
                 else:
                     file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_pears_full.npy"
             else: 
@@ -303,6 +304,7 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
                     file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_dcor_full.npy"
                 elif crosscorr:
                     file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_cross_full.npy"
+                    file_name_timeLag = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_time_lag_full.npy"
                 else:
                     file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_pears_full.npy"
         else:
@@ -312,6 +314,7 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
                     file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_dcor.npy"
                 elif crosscorr:
                     file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_cross.npy"
+                    file_name_timeLag = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_time_lag.npy"
                 else:
                     file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_pears.npy"
             else: 
@@ -319,18 +322,24 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
                     file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_dcor.npy"
                 elif crosscorr:
                     file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_cross.npy"
+                    file_name_timeLag = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_time_lag.npy"
                 else:
                     file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_pears.npy"
         
         file_path = os.path.join(kinectome_path, file_name)
+        file_path_timeLag = os.path.join(kinectome_path, file_name_timeLag)
 
         if full_kinectomes:
             np.save(file_path, correlation_matrix_full) 
+            if crosscorr:
+                np.save(file_path_timeLag, timelag_matrix_full)
         else:
             # visualise_kinectome(correlation_matrices, 'test_plot_kinectome_pres.png', marker_list, sub_id, task_name, kinematics, result_base_path)
             print(f"Correlation_matrices shape: {correlation_matrices.shape}")
             # Save kinectomes (as numpy array)
             np.save(file_path, correlation_matrices)   
+            if crosscorr:
+                np.save(file_path_timeLag, timelag_matrices)
         
 
 
