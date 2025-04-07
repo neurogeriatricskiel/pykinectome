@@ -300,3 +300,28 @@ def visualise_kinectome(kinectome, figname, marker_list, sub_id, task_name, kine
 
     plt.tight_layout()  # Adjust layout to prevent overlap
     plt.savefig(save_path, dpi=600)
+
+def plot_difference_matrix(diff_mtrx_sorted, reordered_markers, task, kin, direction, group1_name, group2_name, result_base_path, figname,):
+    """ plots the difference matrix sorted according to the highest differences"""
+    plt.figure(figsize=(10, 8))
+    vmax = np.percentile(np.abs(diff_mtrx_sorted), 98)  # symmetric range around 0
+    sns.heatmap(diff_mtrx_sorted,
+                xticklabels=reordered_markers,
+                yticklabels=reordered_markers,
+                cmap="coolwarm",
+                center=0,
+                square=True,
+                cbar_kws={"label": f"{group1_name} - {group2_name} (Correlation Difference)"},
+                vmin=-vmax, vmax=vmax)
+
+    plt.title(f'{task} | {kin} | {direction} | {group1_name} - {group2_name} (Signed DIFF)')
+    plt.xticks(rotation=90)
+    plt.yticks(rotation=0)
+    plt.tight_layout()
+
+    # Define the save path for the figure
+    result_folder = Path(result_base_path) / "difference_matrices"
+    result_folder.mkdir(parents=True, exist_ok=True)
+
+    save_path = result_folder / f'{figname}'
+    plt.savefig(save_path, dpi=600)
