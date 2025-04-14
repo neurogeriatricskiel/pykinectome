@@ -46,11 +46,20 @@ MARKER_LIST = ['head', 'ster', 'l_sho', 'r_sho',
                 'l_asis', 'l_psis', 'r_asis', 'r_psis', 
                 'l_th', 'r_th', 'l_sk', 'r_sk', 
                 'l_ank', 'r_ank', 'l_toe', 'r_toe']
+
+MARKER_LIST_AFFECT = [
+        'head', 'ster',
+        'sho_la', 'sho_ma', 'elbl_la', 'elbl_ma', 'wrist_la', 'wrist_ma', 'hand_la', 'hand_ma',
+        'asis_la', 'asis_ma', 'psis_la', 'psis_ma',
+        'th_la', 'th_ma', 'sk_la', 'sk_ma',
+        'ank_la', 'ank_ma', 'toe_la', 'toe_ma'
+    ] # desired order of markers after sorting more and less affected sides 
+    
 DIAGNOSIS = ['diagnosis_parkinson'] # a list of diagnoses of interest
 
 FULL = False # True or False depending if full kinectome (all three directions in one kinectome) should be analysed
 
-CORRELATION = 'cross' # 'cross' or 'dcor' are the other options, depending on which correlation methods should be used for building the kinectomes
+CORRELATION = 'pears' # 'pears', 'cross' or 'dcor' are the options, depending on which correlation methods should be used for building the kinectomes
 
 PD_ON = ['pp065', 'pp032'] # a list of sub_ids of PD that were measured in on condition
 
@@ -62,9 +71,9 @@ def main() -> None:
     # can be done once since it saves the kinectomes as .npy files in the derived_data 
     # kinectome.calculate_all_kinectomes(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, RAW_DATA_PATH, FS, BASE_PATH, MARKER_LIST, RESULT_BASE_PATH, FULL) 
     
-    # investigate kinectome characterisstics (mean and standard deviation of the kinectomes)
+    # investigate kinectome characteristics (mean and standard deviation of the kinectomes)
     # uses permutation analysis (Spearman's rho) to check if the matrices correlate with one another 
-    kinectome_characteristics.compare_between_groups(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST, RESULT_BASE_PATH, FULL, CORRELATION)
+    kinectome_characteristics.compare_between_groups(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL, CORRELATION)
 
 
 

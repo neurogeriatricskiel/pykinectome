@@ -10,6 +10,7 @@ import seaborn as sns
 from statsmodels.stats.dist_dependence_measures import distance_correlation
 from tqdm import tqdm
 from src.data_utils.plotting import visualise_kinectome
+from pathlib import Path
 
 def find_gait_cycles(base_path, data: pd.DataFrame, sub_id: str, task_name: str, run: str, linux: bool):
     """
@@ -329,6 +330,15 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
         file_path = os.path.join(kinectome_path, file_name)
         file_path_timeLag = os.path.join(kinectome_path, file_name_timeLag)
 
+        # insert the function which reorders the kinectome based on more and less affected sides here 
+
+        demographics_row = find_demographics_row(sub_id, run)
+
+        to_be_reordered = correlation_matrix_full if full_kinectomes else correlation_matrices
+
+        reordered_correlation_matrix = reorder_kinectome_by_affected_side(to_be_reordered, marker_list, demographics_row, full_kinectomes)
+
+
         if full_kinectomes:
             np.save(file_path, correlation_matrix_full) 
             if crosscorr:
@@ -378,7 +388,7 @@ def calculate_all_kinectomes(diagnosis, kinematics_list, task_names, tracking_sy
     disease_sub_ids, matched_control_sub_ids = groups.define_groups(diagnosis)
 
     # use for debugging particular subjects
-    # debug_ids = ['pp032']
+    debug_ids = ['pp032']
 
     # file name is based on task names and tracking systems defined in the global variables
  
@@ -436,3 +446,177 @@ def calculate_all_kinectomes(diagnosis, kinematics_list, task_names, tracking_sy
  
 
     return
+
+def reorder_kinectome_by_affected_side(kinectome, labels, demographics_row, full):
+    """
+    Reorder a (33, 33, 3) kinectome based on more/less affected sides using UPDRS scores.
+
+    Parameters:
+    - kinectome: np.array of shape (33, 33, 3)
+    - labels: list of str, current marker labels in the correct order
+    - demographics_row: pd.Series with UPDRS scores for one subject
+
+    Returns:
+    - reordered_kinectome: np.array of shape (33, 33, 3)
+    - reordered_labels: list of str
+    """
+
+    # Sum scores for each limb group
+    r_upper = demographics_row[['updrs_3_3_rigidity_rue', 'updrs_3_4_finger_taps_r',
+                                 'updrs_3_5_hand_movement_r', 'updrs_3_6_pro_sub_hand_r']].sum().sum()
+    l_upper = demographics_row[['updrs_3_3_rigidity_lue', 'updrs_3_4_finger_taps_l',
+                                 'updrs_3_5_hand_movement_l', 'updrs_3_6_pro_sub_hand_l']].sum().sum()
+    r_lower = demographics_row[['updrs_3_3_rigidity_rle', 'updrs_3_7_foot_tap_r',
+                                 'updrs_3_8_leg_agility_r']].sum().sum()
+    l_lower = demographics_row[['updrs_3_3_rigidity_lle', 'updrs_3_7_foot_tap_l',
+                                 'updrs_3_8_leg_agility_l']].sum().sum()
+
+    handedness_number = demographics_row.get('handedness').sum()
+    if handedness_number == 0 or handedness_number == 999:
+       handedness = 'right'
+    elif handedness_number == 1:
+        handedness = 'left'     
+    elif pd .isna(handedness_number):
+        handedness = 'right'
+
+
+    def determine_more_affected(left_metric, right_metric, handedness):
+        """
+        Determine which side is more affected based on UPDRS III and handedness. 
+        To determine the affectedness of the upper extremity, sum up the scores for each UE of:
+        3.3 (rigidity), 3.4 (finger tapping), 3.5 (hand movements, 3.6 (hand pronation/supination))
+        
+        To determine the affectedness of the lower extremity, sum up the scores for each LE of:
+        3.3 (rigidity), 3.7 (toe tapping), and 3.8 (leg agility).
+
+        If the scores are equal, take the dominant hand as the less affected side;
+        If there is no data on handedness, assume the person is right handed 
+        (10.6% world's population is left handed DOI: 10.1037/bul0000229)
+
+        Returns tuples of (more_affected, less_affected) sides.
+        
+        Args:
+            left_metric: Metric value for left side
+            right_metric: Metric value for right side
+            handedness: Patient handedness ('left', 'right', or 'ambidextrous')
+            
+        Returns:
+            Tuple of (more_affected, less_affected) as 'left' or 'right'
+        """
+        # Higher metric indicates more affected
+        if left_metric > right_metric:
+            return 'left', 'right'
+        elif right_metric > left_metric:
+            return 'right', 'left'
+        else:
+            # If metrics are equal, use handedness as a tiebreaker
+            # Non-dominant side is considered more affected in a tie
+            if handedness == 'right':
+                return 'left', 'right'
+            elif handedness == 'left':
+                return 'right', 'left'
+            else:  # ambidextrous
+                # Default to left=more affected if ambidextrous and tied
+                return 'left', 'right'
+
+    upper_ma, upper_la = determine_more_affected(l_upper, r_upper, handedness)
+    lower_ma, lower_la = determine_more_affected(l_lower, r_lower, handedness)
+
+
+    # Define which markers need to be relabeled
+    def relabel(label):
+        # Define which markers belong to upper/lower limbs
+        upper_markers = ['sho', 'elbl', 'wrist', 'hand']
+        lower_markers = ['asis', 'psis', 'th', 'sk', 'ank', 'toe']
+        for marker in upper_markers:
+            if f'l_{marker}' == label:
+                return f'{marker}_ma' if upper_ma == 'left' else f'{marker}_la'
+            if f'r_{marker}' == label:
+                return f'{marker}_ma' if upper_ma == 'right' else f'{marker}_la'
+        for marker in lower_markers:
+            if f'l_{marker}' == label:
+                return f'{marker}_ma' if lower_ma == 'left' else f'{marker}_la'
+            if f'r_{marker}' == label:
+                return f'{marker}_ma' if lower_ma == 'right' else f'{marker}_la'
+        # If not a relabel target, return original
+        return label
+     
+    # Desired order of markers without directional components
+    desired_order = [
+        'head', 'ster',
+        'sho_la', 'sho_ma', 'elbl_la', 'elbl_ma', 'wrist_la', 'wrist_ma', 'hand_la', 'hand_ma',
+        'asis_la', 'asis_ma', 'psis_la', 'psis_ma',
+        'th_la', 'th_ma', 'sk_la', 'sk_ma',
+        'ank_la', 'ank_ma', 'toe_la', 'toe_ma'
+    ]
+    
+    if not full:
+        # Original 22x22x3 processing
+        relabeled = [relabel(lbl) for lbl in labels]
+        label_to_index = {label: i for i, label in enumerate(relabeled)}
+        
+        # Filter for only labels that exist in our data
+        valid_order = [label for label in desired_order if label in label_to_index]
+        sorted_idx = [label_to_index[label] for label in valid_order]
+        
+        reordered_kinectome = kinectome[sorted_idx][:, sorted_idx, :]
+        reordered_labels = [relabeled[i] for i in sorted_idx]
+
+        return reordered_kinectome, reordered_labels
+    
+    else:
+        # Full 66x66 processing with all directions
+        directions = ['AP', 'ML', 'V']
+        
+        # Step 1: Relabel the base markers (without directional suffixes)
+        relabeled_base = [relabel(lbl) for lbl in labels]
+        
+        # Step 2: Create mapping from relabeled markers to original indices
+        relabeled_to_original = {relabeled: i for i, relabeled in enumerate(relabeled_base)}
+        
+        # Step 3: Create a list to map each of the 66 indices to their new position
+        full_reordering = []
+        
+        # For each marker in the desired order
+        for marker in desired_order:
+            if marker in relabeled_to_original:
+                # Find original index of this marker
+                orig_idx = relabeled_to_original[marker]
+                # Add indices for all three directions
+                for direction_offset in range(3):
+                    full_reordering.append(orig_idx * 3 + direction_offset)
+        
+        # Step 4: Reorder the full kinectome
+        reordered_kinectome = kinectome[full_reordering][:, full_reordering]
+        
+        # Step 5: Generate the full labels with direction suffixes
+        full_labels = []
+        for marker in desired_order:
+            if marker in relabeled_to_original:
+                for direction in directions:
+                    full_labels.append(f"{marker}_{direction}")
+        
+        return reordered_kinectome, full_labels
+
+
+
+
+
+def find_demographics_row(sub_id, run):
+    demographics = pd.read_excel(Path("Z:\\Keep Control\\Data\\demographics_scores_internal_use_only.xlsx"))
+    demographics_df = pd.DataFrame(demographics)
+    # e.g., if sub_id = 'pp008'
+    numeric_id = int(sub_id[2:])  # Extract '008' → convert to 8
+    # Match it in the demographics DataFrame
+    subject_rows = demographics_df[demographics_df['id'] == numeric_id]
+
+    if run is None:
+        # Return row for control subject (no run condition)
+        return subject_rows
+
+    # For PD subjects, filter further by medication state
+    # Assumes the column is named 'med_state' and values like 'ON' or 'OFF'
+    run_str = str(run).upper()  # ensure consistent capitalization
+    row = subject_rows[subject_rows['med_state'].str.upper() == run_str]
+
+    return row

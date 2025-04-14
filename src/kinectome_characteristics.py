@@ -300,13 +300,13 @@ def reorder_difference_matrix(matrices, marker_list, result_base_path, correlati
                 reordered_markers = [marker_list[i] for i in sort_order]
 
                 # Plot
-                figname = f"{task}_{kin}_{direction}_absdiff_avgLR_{correlation_method}.png"
+                figname = f"{task}_{kin}_{direction}_absdiff_affect_{correlation_method}.png"
                 plotting.plot_difference_matrix(diff_mtrx_sorted, reordered_markers, task, kin, direction, groups[0], groups[1], result_base_path, figname)
 
     print()
 
 
-def compare_between_groups(diagnosis_list, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list, result_base_path, full, correlation_method):
+def compare_between_groups(diagnosis_list, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list_affect, result_base_path, full, correlation_method):
 
     # calculate the matrices of mean and standard deviation of the kinectomes (mean and sd matrix for each subject-task-kinematics-direction)
     matrices = calc_std_avg_matrices(diagnosis_list, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, full, correlation_method)
@@ -318,7 +318,7 @@ def compare_between_groups(diagnosis_list, kinematics_list, task_names, tracking
     
     # diff_p_values =  permutation_test_one_p(matrices, task_names, kinematics_list, marker_list, result_base_path, matrix_type='avg', n_permutations=10000, diff=False)
 
-    reordered_difference_matrix = reorder_difference_matrix(matrices, marker_list, result_base_path, correlation_method)
+    reordered_difference_matrix = reorder_difference_matrix(matrices, marker_list_affect, result_base_path, correlation_method)
 
     print()
 
