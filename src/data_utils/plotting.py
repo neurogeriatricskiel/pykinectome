@@ -67,7 +67,7 @@ def plot_avg_matrices(avg_group1, avg_group2, group1, group2, marker_list, task,
 
 
 
-def visualise_allegiance_matrix(allegiance_matrix, marker_list, group, task_name, kinematic, direction, result_base_path):
+def visualise_allegiance_matrix(allegiance_matrix, marker_list, group, task_name, kinematic, direction, result_base_path, correlation_method):
     """
     Plot allegiance matrix with hierarchical clustering to reorder markers based on correlation values.
     
@@ -116,27 +116,27 @@ def visualise_allegiance_matrix(allegiance_matrix, marker_list, group, task_name
     # reordered_matrix = pooled_matrix[np.ix_(dendro_order, dendro_order)]
     
      # Define marker ordering (based on the results of Lopez et al. 2022)
-    if direction == 'AP':
-        ordered_marker_list = ['head', 'ster', 'l_sho', 'r_sho', 'l_asis', 'r_asis', 'l_psis', 'r_psis', 
-                               'l_elbl', 'l_wrist', 'l_hand', 'r_th', 'r_sk', 'r_ank', 'r_toe', 
-                               'r_elbl', 'r_wrist', 'r_hand', 'l_th', 'l_sk', 'l_ank', 'l_toe',]
+    # if direction == 'AP':
+    #     ordered_marker_list = ['head', 'ster', 'l_sho', 'r_sho', 'l_asis', 'r_asis', 'l_psis', 'r_psis', 
+    #                            'l_elbl', 'l_wrist', 'l_hand', 'r_th', 'r_sk', 'r_ank', 'r_toe', 
+    #                            'r_elbl', 'r_wrist', 'r_hand', 'l_th', 'l_sk', 'l_ank', 'l_toe',]
         
-    elif direction == 'ML':
-        ordered_marker_list = ['ster', 'l_sho', 'r_sho', 
-                               'head', 'l_asis', 'r_asis', 'l_psis','r_psis', 'l_elbl', 'l_wrist', 'l_hand', 'r_elbl', 'r_wrist', 'r_hand',
-                                'l_th', 'l_sk', 'l_ank', 'l_toe', 'r_th', 'r_sk', 'r_ank', 'r_toe'
-        ]
+    # elif direction == 'ML':
+    #     ordered_marker_list = ['ster', 'l_sho', 'r_sho', 
+    #                            'head', 'l_asis', 'r_asis', 'l_psis','r_psis', 'l_elbl', 'l_wrist', 'l_hand', 'r_elbl', 'r_wrist', 'r_hand',
+    #                             'l_th', 'l_sk', 'l_ank', 'l_toe', 'r_th', 'r_sk', 'r_ank', 'r_toe'
+    #     ]
     
-    elif direction == 'V':
-        ordered_marker_list = ['head', 'ster', 'l_sho', 'r_sho', 'l_asis', 'l_psis', 'r_asis', 'r_psis', 'l_th', 'l_sk', 'r_th', 'r_sk',
-                               'l_elbl','l_wrist', 'l_hand', 'r_elbl', 'r_wrist', 'r_hand',
-                               'l_ank', 'l_toe', 'r_ank', 'r_toe']
+    # elif direction == 'V':
+    #     ordered_marker_list = ['head', 'ster', 'l_sho', 'r_sho', 'l_asis', 'l_psis', 'r_asis', 'r_psis', 'l_th', 'l_sk', 'r_th', 'r_sk',
+    #                            'l_elbl','l_wrist', 'l_hand', 'r_elbl', 'r_wrist', 'r_hand',
+    #                            'l_ank', 'l_toe', 'r_ank', 'r_toe']
         
 
-    # left_markers = [m for m in marker_list if m.startswith('l_')]
-    # right_markers = [m for m in marker_list if m.startswith('r_')]
-    # middle_markers = ['head', 'ster']
-    # ordered_marker_list = middle_markers + left_markers + right_markers   
+    ma_markers = [m for m in marker_list if m.endswith('_la')]
+    la_markers = [m for m in marker_list if m.endswith('_ma')]
+    middle_markers = ['head', 'ster']
+    ordered_marker_list = middle_markers + ma_markers + la_markers   
  
 
     # Get new indices based on the ordered list
@@ -157,7 +157,7 @@ def visualise_allegiance_matrix(allegiance_matrix, marker_list, group, task_name
     result_folder.mkdir(parents=True, exist_ok=True)
 
     # Define save path for the figure
-    save_path = result_folder / f"avg_allegiance_matrices_{group}_{task_name}_{kinematic}_{direction}.png"
+    save_path = result_folder / f"avg_allegiance_matrices_{group}_{task_name}_{kinematic}_{direction}_{correlation_method}.png"
     plt.tight_layout()
     plt.savefig(save_path, dpi=600)
  
