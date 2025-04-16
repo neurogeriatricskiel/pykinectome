@@ -145,11 +145,17 @@ def timelag_cross_correlation_matrix(data: pd.DataFrame, marker_list: list):
 
     Returns:
     - corr_matrix (np.ndarray): Maximum cross-correlation values.
-    - lag_matrix (np.ndarray): Corresponding time lags.
+    - lag_matrix (np.ndarray): Corresponding time lags. 
+        A positive lag value at lag_matrix[i, j] means signal j leads signal i by that percentage of the gait cycle. 
+        The peak correlation is found when signal j is shifted backward in time (or signal i is shifted forward) by that amount.
+
     """
     n_markers = len(marker_list)
     corr_matrix = np.zeros((n_markers, n_markers))
     lag_matrix = np.zeros((n_markers, n_markers))
+
+    # determine the length of the gait cycle
+    gait_cycle_frames = len(data)
 
     for i in range(n_markers):
         for j in range(i + 1, n_markers):  # Compute only upper triangle (symmetric)
@@ -164,13 +170,16 @@ def timelag_cross_correlation_matrix(data: pd.DataFrame, marker_list: list):
             max_idx = np.argmax(np.abs(corr))
             
             corr_matrix[i, j] = corr[max_idx]
-            lag_matrix[i, j] = lags[max_idx]
+
+            # Convert lag to percentage of gait cycle (with 2 decimal places)
+            lag_percentage = (lags[max_idx] / gait_cycle_frames) * 100
+            lag_matrix[i, j] = round(lag_percentage, 0)
             
             # Mirror results for symmetric matrix
             corr_matrix[j, i] = corr[max_idx]
-            lag_matrix[j, i] = -lags[max_idx]
-
-    return corr_matrix, lag_matrix/200
+            lag_matrix[j, i] = round(-lag_percentage, 0) # Negate for symmetry
+    
+    return corr_matrix, lag_matrix
 
 def distance_correlation_matrix(data: pd.DataFrame, markers_list: list):
     """
@@ -189,9 +198,8 @@ def distance_correlation_matrix(data: pd.DataFrame, markers_list: list):
 
 def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: str, tracksys: str, kinematics: str, base_path: str, result_base_path: str, marker_list: list, 
                         full_kinectomes, 
+                        correlation_method,
                         linux = False, 
-                        dcor = False, 
-                        crosscorr=True
                         ):
     """
     Computes Pearson correlation matrices for marker positions in x, y, and z coordinates across gait cycles 
@@ -212,10 +220,6 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
     Returns:
     - None: The function saves correlation matrices but does not return a value.
     """
-
-    # Input checks
-    if dcor + crosscorr > 1:
-        raise ValueError('Only one type of correlation should be set to true!')
 
     gait_cycles, start_onset = find_full_leftRight_cycles(base_path, data, sub_id, task_name, run)
     cycles_iterator = tqdm(gait_cycles, desc=f"---Subject: {sub_id}, Task: {task_name}---")
@@ -252,13 +256,13 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
             correlation_matrix_full = np.zeros((num_markers*3, num_markers*3))
             timelag_matrix_full = np.zeros((num_markers*3, num_markers*3))
         
-            if dcor:
+            if correlation_method == 'dcor':
                 correlation_matrix_full = distance_correlation_matrix(gait_cycle_data[all_markers], all_markers)
-            elif crosscorr:
+            elif correlation_method == 'cross':
                 corr_lag_results_full = timelag_cross_correlation_matrix(gait_cycle_data[all_markers], all_markers)
                 correlation_matrix_full = corr_lag_results_full[0]
                 timelag_matrix_full = corr_lag_results_full[1]
-            else: # default
+            else: # default - Pearson's
                 correlation_matrix_full = np.array(gait_cycle_data[all_markers].corr(method='pearson', min_periods=1))
         
         else: # kinectomes for AP, ML and V directions separately
@@ -270,13 +274,13 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
             # Compute correlation for each coordinate (x, y, z)
             for i, coord in enumerate([f'_{kinematics.upper()}_x', f'_{kinematics.upper()}_y', f'_{kinematics.upper()}_z']):
                 markers = [m + coord for m in marker_list]
-                if dcor:
+                if correlation_method == 'dcor':
                     correlation_matrices[:, :, i] = distance_correlation_matrix(gait_cycle_data[markers], markers)
-                elif crosscorr:
+                elif correlation_method == 'cross':
                     corr_lag_results = timelag_cross_correlation_matrix(gait_cycle_data[markers], markers)
                     correlation_matrices[:, :, i] = corr_lag_results[0]
                     timelag_matrices[:, :, i] = corr_lag_results[1]
-                else: # default
+                else: # default - Pearson's
                     correlation_matrices[:, :, i] = gait_cycle_data[markers].corr(method='pearson', min_periods=1)
 
         # directory to save 
@@ -293,17 +297,17 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
         if full_kinectomes:
             # Define file name (_pos_ for kinetomes of marker position data, vel - velocity, acc - acceleration)
             if run: # 'run-off' or 'run-on' will appear in the kinectome file name
-                if dcor:
+                if correlation_method == 'dcor':
                     file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_dcor_full.npy"
-                elif crosscorr:
+                elif correlation_method == 'cross':
                     file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_cross_full.npy"
                     file_name_timeLag = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_time_lag_full.npy"         
                 else:
                     file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_pears_full.npy"
             else: 
-                if dcor:
+                if correlation_method == 'dcor':
                     file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_dcor_full.npy"
-                elif crosscorr:
+                elif correlation_method == 'cross':
                     file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_cross_full.npy"
                     file_name_timeLag = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_time_lag_full.npy"
                 else:
@@ -311,24 +315,26 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
         else:
             # Define file name (_pos_ for kinetomes of marker position data, vel - velocity, acc - acceleration)
             if run: # 'run-off' or 'run-on' will appear in the kinectome file name
-                if dcor:
+                if correlation_method == 'dcor':
                     file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_dcor.npy"
-                elif crosscorr:
+                elif correlation_method == 'cross':
                     file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_cross.npy"
                     file_name_timeLag = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_time_lag.npy"
                 else:
                     file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_pears.npy"
             else: 
-                if dcor:
+                if correlation_method == 'dcor':
                     file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_dcor.npy"
-                elif crosscorr:
+                elif correlation_method == 'cross':
                     file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_cross.npy"
                     file_name_timeLag = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_time_lag.npy"
                 else:
                     file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_pears.npy"
         
         file_path = os.path.join(kinectome_path, file_name)
-        file_path_timeLag = os.path.join(kinectome_path, file_name_timeLag)
+        
+        if correlation_method == 'cross':
+            file_path_timeLag = os.path.join(kinectome_path, file_name_timeLag)
 
         # insert the function which reorders the kinectome based on more and less affected sides here 
 
@@ -337,24 +343,18 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
         to_be_reordered = correlation_matrix_full if full_kinectomes else correlation_matrices
 
         reordered_correlation_matrix = reorder_kinectome_by_affected_side(to_be_reordered, marker_list, demographics_row, full_kinectomes)
-
-
-        if full_kinectomes:
-            np.save(file_path, correlation_matrix_full) 
-            if crosscorr:
-                np.save(file_path_timeLag, timelag_matrix_full)
-        else:
-            # visualise_kinectome(correlation_matrices, 'test_plot_kinectome_pres.png', marker_list, sub_id, task_name, kinematics, result_base_path)
-            print(f"Correlation_matrices shape: {correlation_matrices.shape}")
-            # Save kinectomes (as numpy array)
-            np.save(file_path, correlation_matrices)   
-            if crosscorr:
-                np.save(file_path_timeLag, timelag_matrices)
+        np.save(file_path, reordered_correlation_matrix[0])
         
+        if correlation_method == 'cross':
+            to_be_reordered_lag = timelag_matrix_full if full_kinectomes else timelag_matrices
+            reordered_timelag_matrices = reorder_kinectome_by_affected_side(to_be_reordered_lag, marker_list, demographics_row, full_kinectomes)
+
+            np.save(file_path_timeLag, reordered_timelag_matrices[0])
 
 
 
-def calculate_all_kinectomes(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, raw_data_path, fs, base_path, marker_list, result_base_path, full) -> None:
+def calculate_all_kinectomes(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, raw_data_path, fs, 
+                             base_path, marker_list, result_base_path, full, correlation_method) -> None:
     """
     Calculates kinectomes for all subejcts. 
     This function iterates over a predefined list of subjects, tasks, tracking systems, and kinematic data types     
@@ -440,14 +440,15 @@ def calculate_all_kinectomes(diagnosis, kinematics_list, task_names, tracking_sy
                                 run = None         
 
                             # calculates the kinectomes in AP, ML and V directions and saves as .npy files
-                            calculate_kinectome(preprocessed_data, sub_id, task_name, run, tracksys, kinematics, base_path, result_base_path, marker_list, full)
+                            calculate_kinectome(preprocessed_data, sub_id, task_name, run, tracksys, kinematics, base_path, result_base_path, 
+                                                marker_list, full, correlation_method)
                         else:
                             print(f"No matching motion file found for sub-{sub_id}, task-{task_name}, tracksys-{tracksys}, run-{run}")
  
 
     return
 
-def reorder_kinectome_by_affected_side(kinectome, labels, demographics_row, full):
+def reorder_kinectome_by_affected_side(kinectome, marker_list, demographics_row, full):
     """
     Reorder a (33, 33, 3) kinectome based on more/less affected sides using UPDRS scores.
 
@@ -498,7 +499,7 @@ def reorder_kinectome_by_affected_side(kinectome, labels, demographics_row, full
         Args:
             left_metric: Metric value for left side
             right_metric: Metric value for right side
-            handedness: Patient handedness ('left', 'right', or 'ambidextrous')
+            handedness: Patient handedness ('left', 'right')
             
         Returns:
             Tuple of (more_affected, less_affected) as 'left' or 'right'
@@ -546,13 +547,12 @@ def reorder_kinectome_by_affected_side(kinectome, labels, demographics_row, full
         'head', 'ster',
         'sho_la', 'sho_ma', 'elbl_la', 'elbl_ma', 'wrist_la', 'wrist_ma', 'hand_la', 'hand_ma',
         'asis_la', 'asis_ma', 'psis_la', 'psis_ma',
-        'th_la', 'th_ma', 'sk_la', 'sk_ma',
-        'ank_la', 'ank_ma', 'toe_la', 'toe_ma'
+        'th_la', 'th_ma', 'sk_la', 'sk_ma', 'ank_la', 'ank_ma', 'toe_la', 'toe_ma'
     ]
     
     if not full:
         # Original 22x22x3 processing
-        relabeled = [relabel(lbl) for lbl in labels]
+        relabeled = [relabel(lbl) for lbl in marker_list]
         label_to_index = {label: i for i, label in enumerate(relabeled)}
         
         # Filter for only labels that exist in our data
@@ -565,41 +565,49 @@ def reorder_kinectome_by_affected_side(kinectome, labels, demographics_row, full
         return reordered_kinectome, reordered_labels
     
     else:
-        # Full 66x66 processing with all directions
+        # Full 66x66 processing
         directions = ['AP', 'ML', 'V']
         
-        # Step 1: Relabel the base markers (without directional suffixes)
-        relabeled_base = [relabel(lbl) for lbl in labels]
+        # Create mapping from original markers to their position in MARKER_LIST
+        marker_to_pos = {marker: i for i, marker in enumerate(marker_list)}
         
-        # Step 2: Create mapping from relabeled markers to original indices
-        relabeled_to_original = {relabeled: i for i, relabeled in enumerate(relabeled_base)}
+        # Relabel the markers
+        relabeled_markers = [relabel(marker) for marker in marker_list]
         
-        # Step 3: Create a list to map each of the 66 indices to their new position
-        full_reordering = []
+        # Create mapping from relabeled markers to desired position
+        desired_pos = {marker: i for i, marker in enumerate(desired_order)}
         
-        # For each marker in the desired order
+        # Create reordering index list (for all 66 indices)
+        reorder_indices = []
+        
+        # For each marker and each direction in the desired order
         for marker in desired_order:
-            if marker in relabeled_to_original:
-                # Find original index of this marker
-                orig_idx = relabeled_to_original[marker]
-                # Add indices for all three directions
-                for direction_offset in range(3):
-                    full_reordering.append(orig_idx * 3 + direction_offset)
+            # Find the original marker that matches this desired marker
+            original_markers = []
+            for i, relabeled in enumerate(relabeled_markers):
+                if relabeled == marker:
+                    original_markers.append(marker_list[i])
+            
+            if not original_markers:
+                continue  # Skip if no match found
+                
+            for orig_marker in original_markers:
+                orig_pos = marker_to_pos[orig_marker]
+                # Add indices for all three directions (AP, ML, V)
+                for direction_idx in range(3):
+                    reorder_indices.append(orig_pos * 3 + direction_idx)
         
-        # Step 4: Reorder the full kinectome
-        reordered_kinectome = kinectome[full_reordering][:, full_reordering]
+        # Reorder the kinectome using the computed indices
+        reordered_kinectome = kinectome[reorder_indices, :][:, reorder_indices]
         
-        # Step 5: Generate the full labels with direction suffixes
-        full_labels = []
+        # Generate new labels
+        reordered_labels = []
         for marker in desired_order:
-            if marker in relabeled_to_original:
-                for direction in directions:
-                    full_labels.append(f"{marker}_{direction}")
+            for direction in directions:
+                if any(relabeled == marker for relabeled in relabeled_markers):
+                    reordered_labels.append(f"{marker}_{direction}")
         
-        return reordered_kinectome, full_labels
-
-
-
+        return reordered_kinectome, reordered_labels
 
 
 def find_demographics_row(sub_id, run):
