@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import os
 
 
-def permute(matrix1, matrix2, marker_list, task, matrix_type, kinematic, direction, result_base_path):
+def permute(matrix1, matrix2, marker_list, task, matrix_type, kinematic, direction, result_base_path, correlation_method):
     
     # Convert avg_group1 (numpy array) into a DataFrame
     df_group1 = pd.DataFrame(matrix1, index=marker_list, columns=marker_list)
@@ -29,9 +29,9 @@ def permute(matrix1, matrix2, marker_list, task, matrix_type, kinematic, directi
 
     # Define larger, slightly looser subgroups:
     subgroups = {
-        "upper_body": ['head', 'ster', 'l_sho', 'r_sho', 'l_asis', 'r_asis', 'l_psis', 'r_psis', 
-                    'l_elbl', 'l_wrist', 'l_hand', 'r_elbl', 'r_wrist', 'r_hand'],
-        "lower_body": ['l_th', 'l_sk', 'l_ank', 'l_toe', 'r_th', 'r_sk', 'r_ank', 'r_toe']
+        "upper_body": ['head', 'ster', 'sho_la', 'sho_ma', 'asis_la', 'asis_ma', 'psis_la', 'psis_ma', 
+                    'elbl_la', 'wrist_la', 'hand_la', 'elbl_ma', 'wrist_ma', 'hand_ma'],
+        "lower_body": ['th_la', 'sk_la', 'ank_la', 'toe_la', 'th_ma', 'sk_ma', 'ank_ma', 'toe_ma']
     }
 
     m2_v = upper(df_group2)
@@ -54,7 +54,7 @@ def permute(matrix1, matrix2, marker_list, task, matrix_type, kinematic, directi
     # Compute two-tailed p-value
     perm_p = ((np.sum(np.abs(true_rho) <= np.abs(rhos))) + 1) / (n_iter + 1)
     
-    plot_permutation_histogram(rhos, true_rho, perm_p, result_base_path, task, kinematic, direction, matrix_type)
+    plot_permutation_histogram(rhos, true_rho, perm_p, result_base_path, task, kinematic, direction, matrix_type, correlation_method)
 
 
 def permute_difference_matrix(matrix1, matrix2, group1, group2, marker_list, task, kinematic, direction, result_base_path, matrix_type = 'diff', n_permutations=5000):
@@ -161,7 +161,7 @@ def plot_diff_permutation_histogram(perm_diffs, true_diffs, perm_p, results_path
     plt.savefig(f'permutation_{task}_{kinematic}_{direction}_{matrix_type}.png', dpi=600)
 
 
-def plot_permutation_histogram(rhos, true_rho, perm_p, results_path, task, kinematic, direction, matrix_type):
+def plot_permutation_histogram(rhos, true_rho, perm_p, results_path, task, kinematic, direction, matrix_type, correlation_method):
     f,ax = plt.subplots()
     plt.hist(rhos,bins=20)
     ax.axvline(true_rho,  color = 'r', linestyle='--')
@@ -172,7 +172,7 @@ def plot_permutation_histogram(rhos, true_rho, perm_p, results_path, task, kinem
     else:
         os.chdir(Path(results_path, "avg_std_matrices"))
 
-    plt.savefig(f'permutation_{task}_{kinematic}_{direction}_{matrix_type}.png', dpi=600)
+    plt.savefig(f'permutation_{task}_{kinematic}_{direction}_{matrix_type}_{correlation_method}.png', dpi=600)
 
 
 def upper(df):
