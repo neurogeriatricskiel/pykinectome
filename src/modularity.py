@@ -87,24 +87,31 @@ def compute_allegiance_matrix(partitions, marker_list, num_nodes):
 
 def all_allegiance_matrices_for_subject(kinectomes, marker_list):
     """ A function which saves allegiance matrices built from the kinectomes
-
     note:
         it is not computed per group, so all allegiance matrices (from one subject per trial and per direction) are put into all_allegiance_matrices dict
-
     """
     all_allegiance_matrices = {"AP": [], "ML": [], "V": []}
-    
+   
     for kinectome in kinectomes:
         graphs = build_graph(kinectome, marker_list)
-        for idx, direction in enumerate(["AP", "ML", "V"]):
-            G = graphs[idx]
+        
+        if len(graphs) == 1:
+            # If only one graph, assign it to AP direction (idx 0)
+            G = graphs[0]
             partitions = run_louvain(G, num_iterations=100)
             allegiance_matrix = compute_allegiance_matrix(partitions, marker_list, num_nodes=G.number_of_nodes())
-            all_allegiance_matrices[direction].append(np.array(allegiance_matrix))
-            
-            # Visualize one of the graphs (for debugging purposes)
-            # draw_graph_with_weights(G)
-    
+            all_allegiance_matrices["AP"].append(np.array(allegiance_matrix))
+        else:
+            # If multiple graphs (3 directions), process each one
+            for idx, direction in enumerate(["AP", "ML", "V"]):
+                G = graphs[idx]
+                partitions = run_louvain(G, num_iterations=100)
+                allegiance_matrix = compute_allegiance_matrix(partitions, marker_list, num_nodes=G.number_of_nodes())
+                all_allegiance_matrices[direction].append(np.array(allegiance_matrix))
+           
+        # Visualize one of the graphs (for debugging purposes)
+        # draw_graph_with_weights(G)
+   
     return all_allegiance_matrices
 
 
@@ -202,8 +209,8 @@ def modularity_analysis(diagnosis, kinematics_list, task_names, tracking_systems
 
     
     # Define the save paths for the pickle files
-    avg_save_path = result_folder / "avg_allegiance_matrices.pkl"
-    std_save_path = result_folder / "std_allegiance_matrices.pkl"
+    avg_save_path = result_folder / f"avg_allegiance_matrices_{correlation_method}.pkl"
+    std_save_path = result_folder / f"std_allegiance_matrices_{correlation_method}.pkl"
 
     # Save dictionaries as pickle files
     with open(avg_save_path, "wb") as f:
@@ -226,8 +233,8 @@ def load_allegiance_matrices(diagnosis, kinematics_list, task_names, tracking_sy
     # Create the folder if it does not exist
     result_folder.mkdir(parents=True, exist_ok=True)
 
-    avg_save_path = result_folder / "avg_allegiance_matrices.pkl"
-    std_save_path = result_folder / "std_allegiance_matrices.pkl"
+    avg_save_path = result_folder / f"avg_allegiance_matrices_{correlation_method}.pkl"
+    std_save_path = result_folder / f"std_allegiance_matrices_{correlation_method}.pkl"
     
     # if allegiance matrices are not calculated
     if not avg_save_path.exists() and not std_save_path.exists():
@@ -314,7 +321,7 @@ def calculate_avg_allg_mtrx(avg_allegiance_matrices):
     
     return group_avg_matrices
 
-def plot_all_allegiance_matrices(allegiance_matrices, marker_list, result_base_path):
+def plot_all_allegiance_matrices(allegiance_matrices, marker_list, result_base_path, correlation_method):
     """ visualise and save all group allegiance matrices as .png
     """
     
@@ -323,7 +330,7 @@ def plot_all_allegiance_matrices(allegiance_matrices, marker_list, result_base_p
             for kinematic in allegiance_matrices[group][task].keys():
                 for direction in allegiance_matrices[group][task][kinematic].keys():
                     matrix = allegiance_matrices[group][task][kinematic][direction]
-                    plotting.visualise_allegiance_matrix(matrix, marker_list, group, task, kinematic, direction, result_base_path)
+                    plotting.visualise_allegiance_matrix(matrix, marker_list, group, task, kinematic, direction, result_base_path, correlation_method)
 
 
 def modularity_main(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list, result_base_path, full, correlation_method):
@@ -336,8 +343,9 @@ def modularity_main(diagnosis, kinematics_list, task_names, tracking_systems, ru
 
     average_group_allegiance_matrices = calculate_avg_allg_mtrx(avg_subject_allegience_matrices)
     std_group_allegiance_matrices = calculate_avg_allg_mtrx(std_subject_allegience_matrices)
-    # 
-    # plot_all_allegiance_matrices(average_group_allegiance_matrices, marker_list, result_base_path)
+    
+    # comment out once all the plots are generated
+    # plot_all_allegiance_matrices(average_group_allegiance_matrices, marker_list, result_base_path, correlation_method)
 
     task ='walkFast'
     matrix_type ='allegiance_std'
@@ -348,5 +356,5 @@ def modularity_main(diagnosis, kinematics_list, task_names, tracking_systems, ru
     matrix2 = std_group_allegiance_matrices['Control'][task][kinematic][direction]
 
 
-    permutation.permute(matrix1, matrix2, marker_list, task, matrix_type, kinematic, direction, result_base_path)
+    permutation.permute(matrix1, matrix2, marker_list, task, matrix_type, kinematic, direction, result_base_path, correlation_method)
     return None
