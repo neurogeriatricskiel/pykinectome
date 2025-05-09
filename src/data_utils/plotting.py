@@ -8,6 +8,8 @@ import scipy.cluster.hierarchy as sch
 from scipy.spatial.distance import squareform, pdist
 import networkx as nx
 import os
+from src.data_utils.permutation import expand_marker_list
+
 
 def plot_avg_matrices(avg_group1, avg_group2, group1, group2, marker_list, task, direction, matrix_type, result_base_path, rho, p_value):
     " Plots the average or std of the kinectomes based on task and direction"
@@ -67,7 +69,7 @@ def plot_avg_matrices(avg_group1, avg_group2, group1, group2, marker_list, task,
 
 
 
-def visualise_allegiance_matrix(allegiance_matrix, marker_list, group, task_name, kinematic, direction, result_base_path, correlation_method):
+def visualise_allegiance_matrix(allegiance_matrix, marker_list, group, task_name, kinematic, direction, result_base_path, correlation_method, full):
     """
     Plot allegiance matrix with hierarchical clustering to reorder markers based on correlation values.
     
@@ -88,55 +90,16 @@ def visualise_allegiance_matrix(allegiance_matrix, marker_list, group, task_name
     result_base_path : str or Path
         Base path for saving results
     """
-
-    # Pool correlations from 0.5 to 1 together
-    # pooled_matrix = allegiance_matrix.astype(np.float64)  # Keep original values
-
-    # # Ensure no NaNs (replace with 0)
-    # pooled_matrix = np.nan_to_num(pooled_matrix, nan=0.0)
-
-    # # Convert to a proper distance matrix (avoid negatives)
-    # distance_matrix = 1 - pooled_matrix
-    # distance_matrix[distance_matrix < 0] = 0
-    # np.fill_diagonal(distance_matrix, 0)
-
-    # # Convert to condensed form for hierarchical clustering
-    # condensed_distances = squareform(distance_matrix, checks=False)
-
-    # # Perform hierarchical clustering
-    # linkage = sch.linkage(condensed_distances, method="ward")
-
-    # # Get dendrogram order
-    # dendro_order = sch.leaves_list(linkage)
-
-    # # Reorder markers
-    # ordered_marker_list = [marker_list[i] for i in dendro_order]
-
-    # Reorder allegiance matrix
-    # reordered_matrix = pooled_matrix[np.ix_(dendro_order, dendro_order)]
-    
-     # Define marker ordering (based on the results of Lopez et al. 2022)
-    # if direction == 'AP':
-    #     ordered_marker_list = ['head', 'ster', 'l_sho', 'r_sho', 'l_asis', 'r_asis', 'l_psis', 'r_psis', 
-    #                            'l_elbl', 'l_wrist', 'l_hand', 'r_th', 'r_sk', 'r_ank', 'r_toe', 
-    #                            'r_elbl', 'r_wrist', 'r_hand', 'l_th', 'l_sk', 'l_ank', 'l_toe',]
-        
-    # elif direction == 'ML':
-    #     ordered_marker_list = ['ster', 'l_sho', 'r_sho', 
-    #                            'head', 'l_asis', 'r_asis', 'l_psis','r_psis', 'l_elbl', 'l_wrist', 'l_hand', 'r_elbl', 'r_wrist', 'r_hand',
-    #                             'l_th', 'l_sk', 'l_ank', 'l_toe', 'r_th', 'r_sk', 'r_ank', 'r_toe'
-    #     ]
-    
-    # elif direction == 'V':
-    #     ordered_marker_list = ['head', 'ster', 'l_sho', 'r_sho', 'l_asis', 'l_psis', 'r_asis', 'r_psis', 'l_th', 'l_sk', 'r_th', 'r_sk',
-    #                            'l_elbl','l_wrist', 'l_hand', 'r_elbl', 'r_wrist', 'r_hand',
-    #                            'l_ank', 'l_toe', 'r_ank', 'r_toe']
-        
-
+       
     ma_markers = [m for m in marker_list if m.endswith('_la')]
     la_markers = [m for m in marker_list if m.endswith('_ma')]
     middle_markers = ['head', 'ster']
-    ordered_marker_list = middle_markers + ma_markers + la_markers   
+    ordered_marker_list = middle_markers + ma_markers + la_markers
+
+    # relabel the markers if analysing the full matrix (66x66)
+    if allegiance_matrix.shape != (len(marker_list),len(marker_list)):
+        marker_list = expand_marker_list(marker_list)
+        ordered_marker_list = expand_marker_list(ordered_marker_list)   
  
 
     # Get new indices based on the ordered list
@@ -157,7 +120,7 @@ def visualise_allegiance_matrix(allegiance_matrix, marker_list, group, task_name
     result_folder.mkdir(parents=True, exist_ok=True)
 
     # Define save path for the figure
-    save_path = result_folder / f"avg_allegiance_matrices_{group}_{task_name}_{kinematic}_{direction}_{correlation_method}.png"
+    save_path = result_folder / f"avg_allegiance_matrices_{group}_{task_name}_{kinematic}_{correlation_method}{'_full' if full else direction}.png"
     plt.tight_layout()
     plt.savefig(save_path, dpi=600)
  
