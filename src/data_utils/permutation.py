@@ -8,8 +8,34 @@ import matplotlib.pyplot as plt
 import os
 
 
+def get_adaptive_subgroups(matrix, marker_list):
+    """
+    Return subgroups of body segments (labeled properly) that adapt based on matrix dimensions.
+    If matrix shape doesn't match marker_list length, expand the marker lists.
+    """
+    base_subgroups = {
+        "upper_body": ['head', 'ster', 'sho_la', 'sho_ma', 'asis_la', 'asis_ma', 'psis_la', 'psis_ma',
+                    'elbl_la', 'wrist_la', 'hand_la', 'elbl_ma', 'wrist_ma', 'hand_ma'],
+        "lower_body": ['th_la', 'sk_la', 'ank_la', 'toe_la', 'th_ma', 'sk_ma', 'ank_ma', 'toe_ma']
+    }
+    
+    # Check if expansion is needed
+    needs_expansion = matrix.shape != (len(marker_list), len(marker_list))
+    
+    if needs_expansion:
+        return {group: expand_marker_list(markers) for group, markers in base_subgroups.items()}
+    else:
+        return base_subgroups
+
 def permute(matrix1, matrix2, marker_list, task, matrix_type, kinematic, direction, result_base_path, correlation_method):
     
+    # Define subgroups of body segments (marker labels) for shuffling
+    subgroups = get_adaptive_subgroups(matrix1, marker_list)
+
+    if matrix1.shape != (len(marker_list),len(marker_list)):
+        marker_list = expand_marker_list(marker_list)
+
+
     # Convert avg_group1 (numpy array) into a DataFrame
     df_group1 = pd.DataFrame(matrix1, index=marker_list, columns=marker_list)
     df_group2 = pd.DataFrame(matrix2, index=marker_list, columns=marker_list)
@@ -27,13 +53,7 @@ def permute(matrix1, matrix2, marker_list, task, matrix_type, kinematic, directi
     n_iter = 5000
     true_rho, _ = stats.spearmanr(upper(df_group1), upper(df_group2))
 
-    # Define larger, slightly looser subgroups:
-    subgroups = {
-        "upper_body": ['head', 'ster', 'sho_la', 'sho_ma', 'asis_la', 'asis_ma', 'psis_la', 'psis_ma', 
-                    'elbl_la', 'wrist_la', 'hand_la', 'elbl_ma', 'wrist_ma', 'hand_ma'],
-        "lower_body": ['th_la', 'sk_la', 'ank_la', 'toe_la', 'th_ma', 'sk_ma', 'ank_ma', 'toe_ma']
-    }
-
+    # upper triangle of the matrix 
     m2_v = upper(df_group2)
 
     for _ in range(n_iter):
@@ -192,3 +212,23 @@ def upper(df):
             raise TypeError('Must be np.ndarray or pd.DataFrame')
     mask = np.triu_indices(df.shape[0], k=1)
     return df[mask]
+
+def expand_marker_list(marker_list):
+
+    """
+    input - a list of 22 marker names
+
+    output - a list of 66 marker names where each marker gets AP, ML, and V direction suffix
+    
+    """
+    expanded_list = []
+
+    directions = ['AP', 'ML', 'V']
+
+    for marker in marker_list:
+        for direction in directions:
+            new_marker_name = f'{marker}_{direction}'
+
+            expanded_list.append(new_marker_name)
+
+    return expanded_list
