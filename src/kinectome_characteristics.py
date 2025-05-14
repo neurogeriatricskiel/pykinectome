@@ -267,7 +267,7 @@ def average_symmetric_matrix(matrix, marker_list):
 
 
 
-def reorder_difference_matrix(matrices, marker_list, result_base_path, correlation_method):
+def reorder_difference_matrix(matrices, marker_list, result_base_path, correlation_method, full):
     """Calculates the difference nmatrix between Control group and the group of ineterest
     and reorders it from biggest to smallest difference"""
 
@@ -277,6 +277,10 @@ def reorder_difference_matrix(matrices, marker_list, result_base_path, correlati
     tasks = avg_matrices[groups[0]].keys()
     kinematics = avg_matrices[groups[0]][next(iter(tasks))].keys()
     directions = avg_matrices[groups[0]][next(iter(tasks))][next(iter(kinematics))].keys()
+    
+    # expand the marker list (add suffixes _AP, _ML, and _V) if analysing the full graph
+    if 'full' in directions:
+        marker_list = permutation.expand_marker_list(marker_list)
 
     for task in tasks:
         for kin in kinematics:
@@ -294,13 +298,13 @@ def reorder_difference_matrix(matrices, marker_list, result_base_path, correlati
                 diff_mat = mat_group1 - mat_group2
 
                 # Sort by highest total difference
-                sort_order = np.argsort(-np.sum(diff_mat, axis=1))
+                sort_order = np.argsort(-np.sum(np.abs(diff_mat), axis=1))
                 diff_mtrx_sorted = diff_mat[np.ix_(sort_order, sort_order)]
                 # reordered_markers = [markers_avg[i] for i in sort_order]   # for single-body matrix
                 reordered_markers = [marker_list[i] for i in sort_order]
 
                 # Plot
-                figname = f"{task}_{kin}_{direction}_absdiff_affect_{correlation_method}.png"
+                figname = f"{task}_{kin}_{direction}_absdiff_affect_{correlation_method}_{'full' if full else ''}.png"
                 plotting.plot_difference_matrix(diff_mtrx_sorted, reordered_markers, task, kin, direction, groups[0], groups[1], result_base_path, figname)
 
     print()
@@ -318,7 +322,7 @@ def compare_between_groups(diagnosis_list, kinematics_list, task_names, tracking
     
     # diff_p_values =  permutation_test_one_p(matrices, task_names, kinematics_list, marker_list, result_base_path, matrix_type='avg', n_permutations=10000, diff=False)
 
-    reordered_difference_matrix = reorder_difference_matrix(matrices, marker_list_affect, result_base_path, correlation_method)
+    reordered_difference_matrix = reorder_difference_matrix(matrices, marker_list_affect, result_base_path, correlation_method, full)
 
     print()
 

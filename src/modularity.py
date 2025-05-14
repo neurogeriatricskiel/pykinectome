@@ -14,7 +14,7 @@ from pathlib import Path
 from src.data_utils import permutation
 from src.data_utils.plotting import draw_graph_with_selected_weights, draw_graph_with_weights
 
-def build_graph(kinectome, marker_list, bound_value=None):
+def build_graph(kinectome, marker_list, bound_value=0.6):
 
     """Builds weighted graphs for AP, ML, V directions if ndim==2, 
     else builds one graph for the full kinectome (containins all directions)     
@@ -96,10 +96,11 @@ def all_allegiance_matrices_for_subject(kinectomes, marker_list):
         graphs = build_graph(kinectome, marker_list)
         
         if len(graphs) == 1:
-            # If only one graph, assign it to AP direction (idx 0)
+            # If only one (full) graph, assign it to AP direction (idx 0)
             G = graphs[0]
             partitions = run_louvain(G, num_iterations=100)
-            allegiance_matrix = compute_allegiance_matrix(partitions, marker_list, num_nodes=G.number_of_nodes())
+            marker_list_exp = permutation.expand_marker_list(marker_list)
+            allegiance_matrix = compute_allegiance_matrix(partitions, marker_list_exp, num_nodes=G.number_of_nodes())
             all_allegiance_matrices["AP"].append(np.array(allegiance_matrix))
         else:
             # If multiple graphs (3 directions), process each one
@@ -233,8 +234,8 @@ def load_allegiance_matrices(diagnosis, kinematics_list, task_names, tracking_sy
     # Create the folder if it does not exist
     result_folder.mkdir(parents=True, exist_ok=True)
 
-    avg_save_path = result_folder / f"avg_allegiance_matrices_{correlation_method}.pkl"
-    std_save_path = result_folder / f"std_allegiance_matrices_{correlation_method}.pkl"
+    avg_save_path = result_folder / f"avg_allegiance_matrices_{'full_' if full else ''}{correlation_method}.pkl"
+    std_save_path = result_folder / f"std_allegiance_matrices_{'full_' if full else ''}{correlation_method}.pkl"
     
     # if allegiance matrices are not calculated
     if not avg_save_path.exists() and not std_save_path.exists():
@@ -254,7 +255,7 @@ def load_allegiance_matrices(diagnosis, kinematics_list, task_names, tracking_sy
 
     return avg_allegience_matrices, std_allegience_matrices
 
-def calculate_avg_allg_mtrx(avg_allegiance_matrices):
+def calculate_avg_allg_mtrx(avg_allegiance_matrices, full):
 
     """
     Compute average matrices for each group, task, kinematic type, and direction.
@@ -292,36 +293,92 @@ def calculate_avg_allg_mtrx(avg_allegiance_matrices):
                         all_kinematics[task][kinematic] = set()
                     
                     all_kinematics[task][kinematic].update(direction_data.keys())
-        
-        # Compute averages for each task, kinematic, direction combination
+
+
+# Compute averages for each task, kinematic, direction combination
         for task in all_tasks:
             for kinematic in all_kinematics.get(task, {}):
                 group_avg_matrices[group][task][kinematic] = {}
                 
-                for direction in all_kinematics[task][kinematic]:
-                    # Collect matrices for this combination
+                if full:
+                    # Handle 66x66 matrices - check if AP key has a 66x66 matrix
                     valid_matrices = []
                     
                     for participant_id, participant_data in participants.items():
-                        if (task in participant_data and 
-                            kinematic in participant_data[task] and 
-                            direction in participant_data[task][kinematic]):
-                            # Get the matrix
-                            matrix = participant_data[task][kinematic][direction]
+                        if (task in participant_data and
+                            kinematic in participant_data[task] and
+                            'AP' in participant_data[task][kinematic]):
                             
-                            # Only include non-None matrices with actual content and correct shape
-                            if matrix is not None and hasattr(matrix, 'shape') and matrix.shape == (22, 22):
+                            matrix = participant_data[task][kinematic]['AP']
+                            
+                            # Check if matrix is valid and 66x66
+                            if (matrix is not None and 
+                                hasattr(matrix, 'shape') and 
+                                matrix.shape == (66, 66) and
+                                not np.isnan(matrix).all()):
                                 valid_matrices.append(matrix)
                     
                     # Compute average if we have valid matrices
                     if valid_matrices:
-                        # All matrices should be numpy arrays with shape (22, 22)
-                        avg_matrix = np.mean(valid_matrices, axis=0)
-                        group_avg_matrices[group][task][kinematic][direction] = avg_matrix
-    
+                        avg_matrix = np.nanmean(valid_matrices, axis=0)
+                        group_avg_matrices[group][task][kinematic]['full'] = avg_matrix
+                
+                else:
+                    # Original code for 22x22 matrices with directions
+                    for direction in all_kinematics[task][kinematic]:
+                        # Collect matrices for this combination
+                        valid_matrices = []
+                       
+                        for participant_id, participant_data in participants.items():
+                            if (task in participant_data and
+                                kinematic in participant_data[task] and
+                                direction in participant_data[task][kinematic]):
+                                # Get the matrix
+                                matrix = participant_data[task][kinematic][direction]
+                               
+                                # Only include non-None matrices with actual content and correct shape
+                                if (matrix is not None and 
+                                    hasattr(matrix, 'shape') and 
+                                    matrix.shape == (22, 22) and
+                                    not np.isnan(matrix).all()):
+                                    valid_matrices.append(matrix)
+                       
+                        # Compute average if we have valid matrices
+                        if valid_matrices:
+                            # All matrices should be numpy arrays with shape (22, 22)
+                            avg_matrix = np.nanmean(valid_matrices, axis=0)
+                            group_avg_matrices[group][task][kinematic][direction] = avg_matrix
+   
     return group_avg_matrices
+    #     # Compute averages for each task, kinematic, direction combination
+    #     for task in all_tasks:
+    #         for kinematic in all_kinematics.get(task, {}):
+    #             group_avg_matrices[group][task][kinematic] = {}
+                
+    #             for direction in all_kinematics[task][kinematic]:
+    #                 # Collect matrices for this combination
+    #                 valid_matrices = []
+                    
+    #                 for participant_id, participant_data in participants.items():
+    #                     if (task in participant_data and 
+    #                         kinematic in participant_data[task] and 
+    #                         direction in participant_data[task][kinematic]):
+    #                         # Get the matrix
+    #                         matrix = participant_data[task][kinematic][direction]
+                            
+    #                         # Only include non-None matrices with actual content and correct shape
+    #                         if matrix is not None and hasattr(matrix, 'shape') and matrix.shape == (22, 22):
+    #                             valid_matrices.append(matrix)
+                    
+    #                 # Compute average if we have valid matrices
+    #                 if valid_matrices:
+    #                     # All matrices should be numpy arrays with shape (22, 22)
+    #                     avg_matrix = np.mean(valid_matrices, axis=0)
+    #                     group_avg_matrices[group][task][kinematic][direction] = avg_matrix
+    
+    # return group_avg_matrices
 
-def plot_all_allegiance_matrices(allegiance_matrices, marker_list, result_base_path, correlation_method):
+def plot_all_allegiance_matrices(allegiance_matrices, marker_list, result_base_path, correlation_method, full):
     """ visualise and save all group allegiance matrices as .png
     """
     
@@ -330,7 +387,8 @@ def plot_all_allegiance_matrices(allegiance_matrices, marker_list, result_base_p
             for kinematic in allegiance_matrices[group][task].keys():
                 for direction in allegiance_matrices[group][task][kinematic].keys():
                     matrix = allegiance_matrices[group][task][kinematic][direction]
-                    plotting.visualise_allegiance_matrix(matrix, marker_list, group, task, kinematic, direction, result_base_path, correlation_method)
+                    plotting.visualise_allegiance_matrix(matrix, marker_list, group, task, kinematic, direction, result_base_path, correlation_method, full)
+
 
 
 def modularity_main(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list, result_base_path, full, correlation_method):
@@ -341,19 +399,19 @@ def modularity_main(diagnosis, kinematics_list, task_names, tracking_systems, ru
                                                                                 marker_list, result_base_path, full, correlation_method)
     
 
-    average_group_allegiance_matrices = calculate_avg_allg_mtrx(avg_subject_allegience_matrices)
-    std_group_allegiance_matrices = calculate_avg_allg_mtrx(std_subject_allegience_matrices)
+    average_group_allegiance_matrices = calculate_avg_allg_mtrx(avg_subject_allegience_matrices, full)
+    std_group_allegiance_matrices = calculate_avg_allg_mtrx(std_subject_allegience_matrices, full)
     
     # comment out once all the plots are generated
-    # plot_all_allegiance_matrices(average_group_allegiance_matrices, marker_list, result_base_path, correlation_method)
+    # plot_all_allegiance_matrices(average_group_allegiance_matrices, marker_list, result_base_path, correlation_method, full)
 
-    task ='walkFast'
-    matrix_type ='allegiance_std'
+    task ='walkSlow'
+    matrix_type ='allegiance_avg'
     kinematic = 'acc'
-    direction = 'AP'
+    direction = 'V'
     
-    matrix1 = std_group_allegiance_matrices['Parkinson'][task][kinematic][direction]
-    matrix2 = std_group_allegiance_matrices['Control'][task][kinematic][direction]
+    matrix1 = average_group_allegiance_matrices['Parkinson'][task][kinematic][direction]
+    matrix2 = average_group_allegiance_matrices['Control'][task][kinematic][direction]
 
 
     permutation.permute(matrix1, matrix2, marker_list, task, matrix_type, kinematic, direction, result_base_path, correlation_method)
