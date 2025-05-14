@@ -146,7 +146,7 @@ def plot_correlation_heatmap(corr_matrix, marker_list, title='Maximum Cross-Corr
 def plot_lag_heatmap(lag_matrix, markers_list, title='Time Lag at Maximum Correlation', result_base_path = 'C:/Users/Karolina/Desktop/pykinectome/results'):
     """Plot a heatmap of the lag matrix"""
     plt.figure(figsize=(12, 10))
-    sns.heatmap(lag_matrix, annot=True, cmap='coolwarm', 
+    sns.heatmap(np.round(lag_matrix, 1), annot=True, cmap='coolwarm', 
                 xticklabels=markers_list, yticklabels=markers_list)
     plt.title(title)
     plt.tight_layout()
@@ -176,6 +176,8 @@ def draw_graph_with_weights(G, result_base_path = 'C:/Users/Karolina/Desktop/pyk
 
     # Define the save path for the figure
     save_path = result_folder / f"graph_all_weights.png"
+
+    plt.savefig(save_path)
 
 def draw_graph_with_selected_weights(G, selected_edges=None, result_base_path = 'C:/Users/Karolina/Desktop/pykinectome/results'):
     """
