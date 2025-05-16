@@ -11,6 +11,7 @@ import sys
 import pandas as pd
 import src
 import os
+import top_centrality
 
 if sys.platform == "linux":
     RAW_DATA_PATH = Path(
@@ -65,6 +66,10 @@ PD_ON = ['pp065', 'pp032'] # a list of sub_ids of PD that were measured in on co
 
 # path where the results of modularity analysis (std within subjects (csv), avg subject allegiance matrices (pkl) are stored)
 RESULT_BASE_PATH = 'C:/Users/Karolina/Desktop/pykinectome/results'
+
+FULL = False
+
+CORRELATION = 'pears'
 
 def main() -> None:
     
