@@ -1,8 +1,10 @@
 src/fingerprint.py
 test.py
 test.ipynb
+test_plot*
+allegiance_matrix*
 pp0*
-centrality.py
+std_*
 *.png
 
 # Byte-compiled / optimized / DLL files
@@ -176,3 +178,6 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# vscode config
+.vscode/
