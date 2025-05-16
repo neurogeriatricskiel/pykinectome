@@ -265,49 +265,159 @@ def average_symmetric_matrix(matrix, marker_list):
     
     return new_matrix, new_marker_list
 
-
+def summarize_by_anatomical_regions(diff_mat, marker_list):
+    """
+    Aggregates markers into anatomical regions and calculates average differences
+    within and between these regions.
+    
+    Parameters:
+    -----------
+    diff_mat : numpy.ndarray
+        The difference matrix (PD - Control)
+    marker_list : list
+        List of marker names corresponding to diff_mat rows/columns
+        
+    Returns:
+    --------
+    region_diff_matrix : numpy.ndarray
+        Matrix of average differences between regions
+    region_names : list
+        List of region names
+    """
+    # Define anatomical regions based on marker prefixes
+    region_mapping = {        
+        'trunk': ['head', 'ster'],
+        'pelvis': ['psis_la', 'psis_ma', 'asis_la', 'asis_ma'],
+        'least affected arm': ['sho_la',  'elbl_la',  'wrist_la',  'hand_la', ],
+        'most affected arm': ['sho_ma', 'elbl_ma', 'wrist_ma', 'hand_ma'],
+        'least affected leg': ['th_la',  'sk_la',  'ank_la',  'toe_la' ],
+        'most affected leg': ['th_ma', 'sk_ma', 'ank_ma', 'toe_ma']
+    }
+    
+    # Create reverse mapping: marker -> region
+    marker_to_region = {}
+    for region, markers in region_mapping.items():
+        for marker in markers:
+            marker_to_region[marker] = region
+    
+    # Get unique regions
+    regions = list(region_mapping.keys())
+    num_regions = len(regions)
+    
+    # Initialize region difference matrix
+    region_diff_matrix = np.zeros((num_regions, num_regions))
+    region_counts = np.zeros((num_regions, num_regions))
+    
+    # Aggregate differences by region
+    for i, marker_i in enumerate(marker_list):
+        for j, marker_j in enumerate(marker_list):
+            if marker_i in marker_to_region and marker_j in marker_to_region:
+                region_i = regions.index(marker_to_region[marker_i])
+                region_j = regions.index(marker_to_region[marker_j])
+                region_diff_matrix[region_i, region_j] += diff_mat[i, j]
+                region_counts[region_i, region_j] += 1
+    
+    # Compute averages (avoid division by zero)
+    mask = region_counts > 0
+    region_diff_matrix[mask] = region_diff_matrix[mask] / region_counts[mask]
+    
+    return region_diff_matrix, regions
 
 def reorder_difference_matrix(matrices, marker_list, result_base_path, correlation_method, full):
-    """Calculates the difference nmatrix between Control group and the group of ineterest
+    """Calculates the difference matrix between Control group and the group of interest
     and reorders it from biggest to smallest difference"""
-
     avg_matrices = calc_avg_group_matrix(matrices)
-
     groups = list(avg_matrices.keys())
     tasks = avg_matrices[groups[0]].keys()
     kinematics = avg_matrices[groups[0]][next(iter(tasks))].keys()
     directions = avg_matrices[groups[0]][next(iter(tasks))][next(iter(kinematics))].keys()
-    
-    # expand the marker list (add suffixes _AP, _ML, and _V) if analysing the full graph
+   
+    # expand the marker list (add suffixes *AP, *ML, and _V) if analysing the full graph
     if 'full' in directions:
         marker_list = permutation.expand_marker_list(marker_list)
-
+    
     for task in tasks:
         for kin in kinematics:
             for direction in directions:
                 # Get matrices
                 mat_group1 = avg_matrices[groups[0]][task][kin][direction]
                 mat_group2 = avg_matrices[groups[1]][task][kin][direction]
-
-                # # Average left/right sides
-                # mat1_avg, markers_avg = average_symmetric_matrix(mat_group1, marker_list)   # for single-body matrix
-                # mat2_avg, _ = average_symmetric_matrix(mat_group2, marker_list)   # for single-body matrix
-
+                
                 # Absolute difference matrix
-                # diff_mat = mat1_avg - mat2_avg   # for single-body matrix
                 diff_mat = mat_group1 - mat_group2
-
+                
+                # Calculate regional differences
+                region_diff_matrix, region_names = summarize_by_anatomical_regions(diff_mat, marker_list)
+                region_figname = f"{task}_{kin}_{direction}_region_diffs_{correlation_method}.png"
+                plotting.plot_region_difference_matrix(region_diff_matrix, region_names, task, kin, direction, 
+                                                      groups[0], groups[1], result_base_path, region_figname)
+                
                 # Sort by highest total difference
                 sort_order = np.argsort(-np.sum(np.abs(diff_mat), axis=1))
                 diff_mtrx_sorted = diff_mat[np.ix_(sort_order, sort_order)]
-                # reordered_markers = [markers_avg[i] for i in sort_order]   # for single-body matrix
                 reordered_markers = [marker_list[i] for i in sort_order]
-
+                
                 # Plot
-                figname = f"{task}_{kin}_{direction}_absdiff_affect_{correlation_method}_{'full' if full else ''}.png"
+                figname = f"{task}_{kin}_{direction}_absdiff_affect_{correlation_method}.png"
                 plotting.plot_difference_matrix(diff_mtrx_sorted, reordered_markers, task, kin, direction, groups[0], groups[1], result_base_path, figname)
+    
+    # NEW CODE: After processing all matrices, create distribution plots
+    fig = plotting.plot_difference_distributions(avg_matrices, list(tasks), list(kinematics), list(directions))
+    plt.savefig(f"{result_base_path}/difference_distributions_{correlation_method}.png", dpi=300, bbox_inches='tight')
+    plt.close(fig)
 
-    print()
+# def reorder_difference_matrix(matrices, marker_list, result_base_path, correlation_method, full):
+#     """Calculates the difference nmatrix between Control group and the group of ineterest
+#     and reorders it from biggest to smallest difference"""
+
+#     avg_matrices = calc_avg_group_matrix(matrices)
+
+#     groups = list(avg_matrices.keys())
+#     tasks = avg_matrices[groups[0]].keys()
+#     kinematics = avg_matrices[groups[0]][next(iter(tasks))].keys()
+#     directions = avg_matrices[groups[0]][next(iter(tasks))][next(iter(kinematics))].keys()
+    
+#     # expand the marker list (add suffixes _AP, _ML, and _V) if analysing the full graph
+#     if 'full' in directions:
+#         marker_list = permutation.expand_marker_list(marker_list)
+
+#     for task in tasks:
+#         for kin in kinematics:
+#             for direction in directions:
+#                 # Get matrices
+#                 mat_group1 = avg_matrices[groups[0]][task][kin][direction]
+#                 mat_group2 = avg_matrices[groups[1]][task][kin][direction]
+
+#                 # # Average left/right sides
+#                 # mat1_avg, markers_avg = average_symmetric_matrix(mat_group1, marker_list)   # for single-body matrix
+#                 # mat2_avg, _ = average_symmetric_matrix(mat_group2, marker_list)   # for single-body matrix
+
+#                 # Absolute difference matrix
+#                 # diff_mat = mat1_avg - mat2_avg   # for single-body matrix
+#                 diff_mat = mat_group1 - mat_group2                
+
+#                 # For the anatomical regions summary
+#                 region_diff_matrix, region_names = summarize_by_anatomical_regions(diff_mat, marker_list)
+#                 region_figname = f"{task}_{kin}_{direction}_region_diffs_{correlation_method}.png"
+#                 # You'll need to create a plotting function for the region difference matrix
+#                 plotting.plot_region_difference_matrix(region_diff_matrix, region_names, task, kin, direction, 
+#                                       groups[0], groups[1], result_base_path, region_figname)
+                
+#                 # Sort by highest total difference
+#                 sort_order = np.argsort(-np.sum(np.abs(diff_mat), axis=1))
+#                 diff_mtrx_sorted = diff_mat[np.ix_(sort_order, sort_order)]
+#                 # reordered_markers = [markers_avg[i] for i in sort_order]   # for single-body matrix
+#                 reordered_markers = [marker_list[i] for i in sort_order]
+
+#                 # Plot
+#                 figname = f"{task}_{kin}_{direction}_absdiff_affect_{correlation_method}.png"
+#                 plotting.plot_difference_matrix(diff_mtrx_sorted, reordered_markers, task, kin, direction, groups[0], groups[1], result_base_path, figname)
+
+#                 fig = plotting.plot_difference_distributions(avg_matrices, list(tasks), list(kinematics), list(directions))
+#                 plt.savefig(f"{result_base_path}/difference_distributions_{correlation_method}.png", dpi=300, bbox_inches='tight')
+#                 plt.close(fig)
+
+#     print()
 
 
 def compare_between_groups(diagnosis_list, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list_affect, result_base_path, full, correlation_method):

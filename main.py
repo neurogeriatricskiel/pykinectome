@@ -59,7 +59,7 @@ DIAGNOSIS = ['diagnosis_parkinson'] # a list of diagnoses of interest
 
 FULL = False # True or False depending if full kinectome (all three directions in one kinectome) should be analysed
 
-CORRELATION = 'pears' # 'pears', 'cross' or 'dcor' are the options, depending on which correlation methods should be used for building the kinectomes
+CORRELATION = 'cross' # 'pears', 'cross' or 'dcor' are the options, depending on which correlation methods should be used for building the kinectomes
 
 PD_ON = ['pp065', 'pp032'] # a list of sub_ids of PD that were measured in on condition
 
@@ -73,12 +73,12 @@ def main() -> None:
     
     # investigate kinectome characteristics (mean and standard deviation of the kinectomes)
     # uses permutation analysis (Spearman's rho) to check if the matrices correlate with one another 
-    # kinectome_characteristics.compare_between_groups(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL, CORRELATION)
+    kinectome_characteristics.compare_between_groups(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL, CORRELATION)
 
     # time_lag.main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL)
 
 
-    modularity.modularity_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL, CORRELATION)
+    # modularity.modularity_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL, CORRELATION)
                             
 
     # centrality.centrality_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST, RESULT_BASE_PATH)

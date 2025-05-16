@@ -290,3 +290,140 @@ def plot_difference_matrix(diff_mtrx_sorted, reordered_markers, task, kin, direc
 
     save_path = result_folder / f'{figname}'
     plt.savefig(save_path, dpi=600)
+
+
+def plot_region_difference_matrix(region_diff_matrix, region_names, task, kin, direction, 
+                                 group1, group2, result_base_path, figname):
+    """
+    Plots the difference matrix between anatomical regions.
+    
+    Parameters:
+    -----------
+    region_diff_matrix : numpy.ndarray
+        Matrix of average differences between regions
+    region_names : list
+        List of region names
+    task : str
+        Name of the task (walking speed)
+    kin : str
+        Kinematic parameter
+    direction : str
+        Direction (AP, ML, V)
+    group1 : str
+        Name of first group (typically "Parkinson")
+    group2 : str
+        Name of second group (typically "Control")
+    result_base_path : str
+        Path to save the figure
+    figname : str
+        Filename for the figure
+    
+    Returns:
+    --------
+    None (creates and saves the plot)
+    """
+    fig, ax = plt.subplots(figsize=(8, 7))
+    
+    # Determine the maximum absolute value for symmetrical color scaling
+    max_abs_val = np.max(np.abs(region_diff_matrix))
+    vmin, vmax = -max_abs_val, max_abs_val
+    
+    # Create heatmap
+    cax = ax.matshow(region_diff_matrix, cmap='coolwarm', vmin=vmin, vmax=vmax)
+    
+    # Add colorbar
+    cbar = fig.colorbar(cax, label=f'{group1} - {group2} (Correlation Difference)')
+    
+    # Set ticks and labels
+    ax.set_xticks(np.arange(len(region_names)))
+    ax.set_yticks(np.arange(len(region_names)))
+    ax.set_xticklabels(region_names, rotation=45, ha='left')
+    ax.set_yticklabels(region_names)
+    
+    # Add value annotations
+    for i in range(len(region_names)):
+        for j in range(len(region_names)):
+            value = region_diff_matrix[i, j]
+            text_color = 'white' if abs(value) > max_abs_val/2 else 'black'
+            ax.text(j, i, f'{value:.3f}', ha='center', va='center', color=text_color)
+    
+    # Add grid lines
+    ax.set_xticks(np.arange(-.5, len(region_names), 1), minor=True)
+    ax.set_yticks(np.arange(-.5, len(region_names), 1), minor=True)
+    ax.grid(which='minor', color='gray', linestyle='-', linewidth=0.5)
+    
+    # Set title
+    ax.set_title(f'Regional Correlation Differences\n{task} - {kin} - {direction}')
+    
+    # Set margins and layout
+    plt.tight_layout()
+    
+    # Save figure
+    plt.savefig(os.path.join(result_base_path, figname), dpi=300, bbox_inches='tight')
+    plt.close()
+
+
+def plot_difference_distributions(avg_matrices, tasks, kinematics, directions):
+    """
+    Creates histograms showing the distribution of correlation differences
+    for each condition (speed/direction).
+    
+    Parameters:
+    -----------
+    avg_matrices : dict
+        Dictionary containing the averaged correlation matrices for each group
+    tasks : list
+        List of tasks (walking speeds)
+    kinematics : list
+        List of kinematic variables
+    directions : list
+        List of directions (AP, ML, V)
+        
+    Returns:
+    --------
+    None (creates and saves plots)
+    """
+    groups = list(avg_matrices.keys())
+    
+    # Create a figure with subplots arranged by tasks and directions
+    fig, axes = plt.subplots(len(tasks), len(directions), figsize=(15, 10))
+    if len(tasks) == 1 and len(directions) == 1:
+        axes = np.array([[axes]])
+    elif len(tasks) == 1:
+        axes = np.array([axes])
+    elif len(directions) == 1:
+        axes = axes.reshape(-1, 1)
+    
+    for i, task in enumerate(tasks):
+        for j, direction in enumerate(directions):
+            diff_values = []
+            for kin in kinematics:
+                # Get matrices
+                mat_group1 = avg_matrices[groups[0]][task][kin][direction]
+                mat_group2 = avg_matrices[groups[1]][task][kin][direction]
+                
+                # Calculate differences
+                diff_mat = mat_group1 - mat_group2
+                
+                # Extract the upper triangular part (excluding diagonal)
+                mask = np.triu_indices_from(diff_mat, k=1)
+                diff_values.extend(diff_mat[mask])
+            
+            # Plot histogram
+            axes[i, j].hist(diff_values, bins=20, alpha=0.75)
+            axes[i, j].set_title(f"{task} - {direction}")
+            axes[i, j].set_xlabel("Correlation Difference (PD - Control)")
+            axes[i, j].set_ylabel("Frequency")
+            
+            # Add vertical line at zero
+            axes[i, j].axvline(x=0, color='r', linestyle='--')
+            
+            # Add mean value
+            mean_diff = np.mean(diff_values)
+            axes[i, j].axvline(x=mean_diff, color='g', linestyle='-')
+            axes[i, j].text(0.05, 0.95, f"Mean: {mean_diff:.3f}", 
+                           transform=axes[i, j].transAxes, 
+                           verticalalignment='top')
+    
+    plt.tight_layout()
+    return fig
