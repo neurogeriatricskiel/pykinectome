@@ -86,3 +86,60 @@ def cycle_subgraph(G,marker_sublist: list):
     print(f"Subgraph has {subgraph.number_of_nodes()} nodes and {subgraph.number_of_edges()} edges.")
     print(f"The edge data is: {subgraph.edges(data=True)}.")
     return subgraph
+
+def min_pattern_subgraph(G, length: int, start_node):
+    """
+    Returns a path subgraph of G of the specified length, starting from a given node,
+    walking through the graph via edges with the lowest weight and without repeating nodes.
+
+    Parameters
+    ----------
+    G : nx.Graph
+        The input graph.
+    length : int
+        The number of nodes to include in the path.
+    start_node : node
+        The node to start the path from.
+
+    Returns
+    -------
+    subgraph : nx.Graph
+        A subgraph of G that forms a path of the given length.
+    """
+
+    if start_node not in G:
+        raise ValueError(f"Start node {start_node} is not in the graph.")
+    print(f"Start node is {start_node}.")
+    if length < 2:
+        raise ValueError("Length must be at least 2 to form a path.")
+
+    if G.number_of_nodes() < length:
+        raise ValueError("Graph does not have enough nodes to form the path of the given length.")
+
+    subgraph = G.__class__()
+    visited = [start_node]
+    current_node = start_node
+
+    while len(visited) < length:
+        # Get unvisited neighbors with weights
+        neighbors = [
+            (v, G[current_node][v]['weight']) 
+            for v in G.neighbors(current_node) 
+            if v not in visited and 'weight' in G[current_node][v]
+        ]
+
+        if not neighbors:
+            raise ValueError(f"No path of the required length found from node {start_node}: dead end at {current_node}.")
+
+        next_node = min(neighbors, key=lambda x: x[1])[0]
+        visited.append(next_node)
+        current_node = next_node
+
+    # Build subgraph
+    subgraph.add_nodes_from((n, G.nodes[n]) for n in visited)
+    for u, v in zip(visited, visited[1:]):
+        subgraph.add_edge(u, v, **G.get_edge_data(u, v))
+
+    print(f"Subgraph has {subgraph.number_of_nodes()} nodes and {subgraph.number_of_edges()} edges.")
+    print(f"The edge data is: {subgraph.edges(data=True)}.")
+    return subgraph

@@ -9,7 +9,7 @@ from src.data_utils import data_loader, groups
 from src.kinectome import *
 from src.preprocessing import preprocessing
 from src.graph_utils.kinectome2graph import build_graph, clustering_coef, cc_connected_components
-from src.graph_utils.kinectome2pattern import full_subgraph, path_subgraph, cycle_subgraph
+from src.graph_utils.kinectome2pattern import full_subgraph, path_subgraph, cycle_subgraph, min_pattern_subgraph
 from tqdm import tqdm
 from pathlib import Path
 import csv
