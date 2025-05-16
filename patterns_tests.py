@@ -38,8 +38,8 @@ MARKER_LIST = ['head', 'ster', 'l_sho', 'r_sho',
             'l_ank', 'r_ank', 'l_toe', 'r_toe']
 
 # MARKER_SUB_LIST = ['ster', 'l_psis', 'l_asis', 'l_th', 'l_sk', 'l_ank', 'l_toe']
-# MARKER_SUB_LIST = ['ster', 'l_sho', 'l_elbl', 'l_wrist', 'l_hand']
-MARKER_SUB_LIST = ['head', 'ster', '']
+MARKER_SUB_LIST = ['ster', 'l_sho', 'l_elbl', 'l_wrist', 'l_hand']
+# MARKER_SUB_LIST = ['head', 'ster', '']
 RUN = 'on' # dont have id "run" in sample data that I have 
 FS = 200 # sampling rate
 FULL= False

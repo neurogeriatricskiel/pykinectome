@@ -286,7 +286,7 @@ def calculate_average_group_timelag_matrix(time_lag_data):
     
     return group_averages
 
-def main(diagnosis_list, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list_affect, result_base_path, full):
+def time_lag_main(diagnosis_list, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list_affect, result_base_path, full):
 
     # a dictionary containing all time lag matrices 
     all_time_lag_matrices = get_all_time_lag_matrices(diagnosis_list, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, full)

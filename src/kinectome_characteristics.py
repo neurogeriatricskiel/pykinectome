@@ -1,23 +1,13 @@
 import matplotlib
 matplotlib.use('Agg')  # Use a non-interactive backend
 import matplotlib.pyplot as plt
-import os
 import numpy as np
-import networkx as nx
 from src.data_utils.data_loader import load_kinectomes
-from src.data_utils import groups
-from src.data_utils import permutation
-from src.data_utils import plotting
-import seaborn as sns
-import csv
-import pickle
+from src.data_utils import groups, permutation, plotting
 from scipy import stats
-from pathlib import Path
 from statsmodels.stats.multitest import multipletests
 from numpy.linalg import norm
-import random
-import scipy.stats
-import pandas as pd
+
 
 
 def calc_std_avg_matrices(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, full, correlation_method):

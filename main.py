@@ -5,7 +5,7 @@ from src.preprocessing.filter import (
 from src.data_utils import groups
 # from src.kinectome import calculate_crl_mtrx
 from src.preprocessing import preprocessing
-from src import kinectome, modularity, kinectome_characteristics, time_lag
+from src import kinectome, modularity, kinectome_characteristics, time_lag, patterns
 from pathlib import Path
 import sys
 import pandas as pd
@@ -67,7 +67,7 @@ PD_ON = ['pp065', 'pp032'] # a list of sub_ids of PD that were measured in on co
 # path where the results of modularity analysis (std within subjects (csv), avg subject allegiance matrices (pkl) are stored)
 RESULT_BASE_PATH = 'C:/Users/Karolina/Desktop/pykinectome/results'
 
-FULL = False
+# FULL = False
 
 CORRELATION = 'pears'
 
@@ -78,11 +78,12 @@ def main() -> None:
     
     # investigate kinectome characteristics (mean and standard deviation of the kinectomes)
     # uses permutation analysis (Spearman's rho) to check if the matrices correlate with one another 
-    kinectome_characteristics.compare_between_groups(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL, CORRELATION)
+    # kinectome_characteristics.compare_between_groups(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL, CORRELATION)
 
-    # time_lag.main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL)
+    # time_lag.time_lag_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL)
 
 
+    patterns.patterns_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL, CORRELATION)
     # modularity.modularity_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL, CORRELATION)
                             
 

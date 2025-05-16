@@ -14,7 +14,7 @@ from pathlib import Path
 from src.data_utils import permutation
 from src.data_utils.plotting import draw_graph_with_selected_weights, draw_graph_with_weights
 
-def build_graph(kinectome, marker_list, bound_value=0.6):
+def build_graph(kinectome, marker_list, bound_value=None):
 
     """Builds weighted graphs for AP, ML, V directions if ndim==2, 
     else builds one graph for the full kinectome (containins all directions)     
