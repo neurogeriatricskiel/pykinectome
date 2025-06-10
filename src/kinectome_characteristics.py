@@ -422,6 +422,7 @@ def compare_between_groups(diagnosis_list, kinematics_list, task_names, tracking
     
     # diff_p_values =  permutation_test_one_p(matrices, task_names, kinematics_list, marker_list, result_base_path, matrix_type='avg', n_permutations=10000, diff=False)
 
+    # reorder the difference matrix from biggest to smallest difference (row-wise)
     reordered_difference_matrix = reorder_difference_matrix(matrices, marker_list_affect, result_base_path, correlation_method, full)
 
     print()
