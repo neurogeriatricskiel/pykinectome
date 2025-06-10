@@ -67,9 +67,7 @@ PD_ON = ['pp065', 'pp032'] # a list of sub_ids of PD that were measured in on co
 # path where the results of modularity analysis (std within subjects (csv), avg subject allegiance matrices (pkl) are stored)
 RESULT_BASE_PATH = 'C:/Users/Karolina/Desktop/pykinectome/results'
 
-# FULL = False
 
-CORRELATION = 'pears'
 
 def main() -> None:
     
@@ -78,12 +76,18 @@ def main() -> None:
     
     # investigate kinectome characteristics (mean and standard deviation of the kinectomes)
     # uses permutation analysis (Spearman's rho) to check if the matrices correlate with one another 
-    # kinectome_characteristics.compare_between_groups(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL, CORRELATION)
+    kinectome_characteristics.compare_between_groups(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL, CORRELATION)
 
     # time_lag.time_lag_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL)
 
+    # First pass: collect all results
+    # pickle_name = 'PD_paths_AP_fast_dcor.pkl' # depends on the group paths, direction, walking speed, and correlation type
+    # patterns.patterns_stat_analysis(MARKER_LIST_AFFECT, DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH,  RESULT_BASE_PATH, FULL, CORRELATION, pickle_name)
 
-    patterns.patterns_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL, CORRELATION)
+    # # comparison - pickle file containing all statistics for the speed, direction, correlation method and group where the patterns were found
+    # # use_two_stage = False --> classic Bonferroni multiple comparisons method is used. True - first screen for patterns p<.01, then apply Bonferroni
+    # all_significant_patterns = patterns.multiple_corrections(comparison='control_paths_V_slow_pears.pkl', use_two_stage=False)
+
     # modularity.modularity_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL, CORRELATION)
                             
 
