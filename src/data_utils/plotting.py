@@ -223,52 +223,67 @@ def draw_graph_with_selected_weights(G, selected_edges=None, result_base_path = 
 
     plt.savefig(save_path, dpi=600)
 
-def visualise_kinectome(kinectome, figname, marker_list, sub_id, task_name, kinematics, result_base_path):
+import seaborn as sns
+from pathlib import Path
+import matplotlib.gridspec as gridspec
+def visualise_kinectome(kinectome_data, figname, marker_list, sub_id, task_name, kinematics, result_base_path, what_to_plot):
     """
-    Plots the kinectomes in AP, ML, and V directions with marker names as labels.
+    Plots the average (or std) kinectomes in AP, ML, and V directions with marker names as labels.
+    input:
+    kinectome contains the avg adn std kinectome in AP, ML, and V directions nested as a dict
     """
-
-    # Split left and right markers
-    left_markers = [m for m in marker_list if m.startswith('l_')]
-    right_markers = [m for m in marker_list if m.startswith('r_')]
-    middle_markers = ['head', 'ster']
-    
-    # Combine them in the desired order (left-side first, then right-side)
-    ordered_marker_list = middle_markers + left_markers + right_markers
-
-    plt.figure(figsize=(15, 5))
-    # Reorder the kinectome numpy array accordingly
-    marker_indices = [marker_list.index(m) for m in ordered_marker_list]
-    reordered_kinectome = kinectome[np.ix_(marker_indices, marker_indices, [0, 1, 2])]
-    
-    # Define vmin/vmax for each direction
-    min_value = np.min(reordered_kinectome)
-    
-    if min_value < 0:
-        scales = [(0.5, 1) if kinematics == 'pos' else (-1, 1), (-1, 1), (-1, 1)]
+    kinectome_matrices = [
+        kinectome_data['AP'][what_to_plot],
+        kinectome_data['ML'][what_to_plot],
+        kinectome_data['V'][what_to_plot]
+    ]
+    # Calculate global scales across all matrices and extend to theoretical bounds
+    all_values = np.concatenate([matrix.flatten() for matrix in kinectome_matrices])
+    data_vmin = all_values.min()
+    data_vmax = all_values.max()
    
+    # Extend to theoretical bounds (e.g., -1 to 1 for correlations, 0 to 1 for other methods)
+    if data_vmin < 0:
+        global_vmin = -1  # For correlation methods that can go negative
+        global_vmax = 1
     else:
-        scales = [(0.5, 1) if kinematics == 'pos' else (0, 1), (0, 1), (0, 1)]
-
-    for i, matrix in enumerate(reordered_kinectome.transpose(2, 0, 1)):  # Iterate over 3 matrices
-        plt.subplot(1, 3, i + 1)  # Create subplot
-        sns.heatmap(matrix, cmap="coolwarm", vmin=scales[i][0], vmax=scales[i][1], square=True, cbar=True,
-                    xticklabels=ordered_marker_list, yticklabels=ordered_marker_list)  # Add labels
-        
-        plt.title(f"Correlation Matrix {['Anteroposterior', 'Mediolateral', 'Vertical'][i]}")
+        global_vmin = 0   # For methods that are only positive
+        global_vmax = 1
+   
+    scales = [(global_vmin, global_vmax), (global_vmin, global_vmax), (global_vmin, global_vmax)]
     
-    plt.suptitle(f"{kinematics.upper()} kinectomes of {sub_id} during {task_name}")
-
+    # Create figure with gridspec for better control
+    fig = plt.figure(figsize=(18, 6))
+    gs = gridspec.GridSpec(1, 4, width_ratios=[1, 1, 1, 0.05], wspace=0.3)
+    
+    # Create axes for the three heatmaps
+    axes = [fig.add_subplot(gs[0, i]) for i in range(3)]
+    
+    # Create the heatmaps
+    for i, matrix in enumerate(kinectome_matrices):  # Iterate over 3 matrices
+        ax = axes[i]
+        
+        sns.heatmap(matrix, cmap="coolwarm", vmin=scales[i][0], vmax=scales[i][1], square=True,
+                    cbar=False, ax=ax,
+                    xticklabels=marker_list, yticklabels=marker_list)  # Add labels
+        ax.set_title(f"{['Anteroposterior direction', 'Mediolateral direction', 'Vertical direction'][i]}")
+    
+    # Add a single colorbar for all three plots
+    cbar_ax = fig.add_subplot(gs[0, 3])
+    sm = plt.cm.ScalarMappable(cmap="coolwarm", norm=plt.Normalize(vmin=global_vmin, vmax=global_vmax))
+    sm.set_array([])
+    cbar = fig.colorbar(sm, cax=cbar_ax)
+       
+    plt.suptitle(f"{kinematics.upper()} kinectomes of {sub_id} during {task_name}", fontsize='xx-large')
+    
     result_folder = Path(result_base_path) / "kinectomes"
-
     # Create the folder if it does not exist
     result_folder.mkdir(parents=True, exist_ok=True)
-
     # Define the save path for the figure
     save_path = result_folder / f'{figname}'
+    plt.savefig(save_path, dpi=600, bbox_inches='tight')
+    plt.close()  # Close the figure to free memory
 
-    plt.tight_layout()  # Adjust layout to prevent overlap
-    plt.savefig(save_path, dpi=600)
 
 def plot_difference_matrix(diff_mtrx_sorted, reordered_markers, task, kin, direction, group1_name, group2_name, result_base_path, figname):
     """ plots the difference matrix sorted according to the highest differences"""
