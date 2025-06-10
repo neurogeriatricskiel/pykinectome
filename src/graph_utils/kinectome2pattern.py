@@ -26,8 +26,8 @@ def full_subgraph(G, marker_sublist:list):
     subgraph.add_nodes_from((n,G.nodes[n]) for n in marker_sublist)
 
     subgraph.add_edges_from([(u, v, d) for u, v, d in G.edges(data=True) if u in marker_sublist and v in marker_sublist])
-    print(f"Subgraph has {subgraph.number_of_nodes()} nodes and {subgraph.number_of_edges()} edges.")
-    print(f"The edge data is: {subgraph.edges(data=True)}.")
+    # print(f"Subgraph has {subgraph.number_of_nodes()} nodes and {subgraph.number_of_edges()} edges.")
+    # print(f"The edge data is: {subgraph.edges(data=True)}.")
     return subgraph
 
 
@@ -54,8 +54,8 @@ def path_subgraph(G,marker_sublist: list):
     pairwise_list = zip(marker_sublist[0::1],marker_sublist[1::1])
     for pair in pairwise_list:
         subgraph.add_edges_from([(u, v, d) for u, v, d in G.edges(data=True) if u in pair and v in pair])
-    print(f"Subgraph has {subgraph.number_of_nodes()} nodes and {subgraph.number_of_edges()} edges.")
-    print(f"The edge data is: {subgraph.edges(data=True)}.")
+    # print(f"Subgraph has {subgraph.number_of_nodes()} nodes and {subgraph.number_of_edges()} edges.")
+    # print(f"The edge data is: {subgraph.edges(data=True)}.")
     return subgraph
 
 def cycle_subgraph(G,marker_sublist: list):
@@ -83,8 +83,8 @@ def cycle_subgraph(G,marker_sublist: list):
     pairwise_list = zip(nodes_1,chain(nodes_2,(first_node,)))
     for pair in pairwise_list:
         subgraph.add_edges_from([(u, v, d) for u, v, d in G.edges(data=True) if u in pair and v in pair])
-    print(f"Subgraph has {subgraph.number_of_nodes()} nodes and {subgraph.number_of_edges()} edges.")
-    print(f"The edge data is: {subgraph.edges(data=True)}.")
+    # print(f"Subgraph has {subgraph.number_of_nodes()} nodes and {subgraph.number_of_edges()} edges.")
+    # print(f"The edge data is: {subgraph.edges(data=True)}.")
     return subgraph
 
 def min_pattern_subgraph(G, length: int, start_node):
@@ -109,7 +109,7 @@ def min_pattern_subgraph(G, length: int, start_node):
 
     if start_node not in G:
         raise ValueError(f"Start node {start_node} is not in the graph.")
-    print(f"Start node is {start_node}.")
+    # print(f"Start node is {start_node}.")
     if length < 2:
         raise ValueError("Length must be at least 2 to form a path.")
 
@@ -140,8 +140,8 @@ def min_pattern_subgraph(G, length: int, start_node):
     for u, v in zip(visited, visited[1:]):
         subgraph.add_edge(u, v, **G.get_edge_data(u, v))
 
-    print(f"Subgraph has {subgraph.number_of_nodes()} nodes and {subgraph.number_of_edges()} edges.")
-    print(f"The edge data is: {subgraph.edges(data=True)}.")
+    # print(f"Subgraph has {subgraph.number_of_nodes()} nodes and {subgraph.number_of_edges()} edges.")
+    # print(f"The edge data is: {subgraph.edges(data=True)}.")
     return subgraph
 
 
@@ -167,7 +167,7 @@ def strongest_pattern_subgraph(G, length: int, start_node):
 
     if start_node not in G:
         raise ValueError(f"Start node {start_node} is not in the graph.")
-    print(f"Start node is {start_node}.")
+    # print(f"Start node is {start_node}.")
     if length < 2:
         raise ValueError("Length must be at least 2 to form a path.")
 
@@ -198,6 +198,6 @@ def strongest_pattern_subgraph(G, length: int, start_node):
     for u, v in zip(visited, visited[1:]):
         subgraph.add_edge(u, v, **G.get_edge_data(u, v))
 
-    print(f"Subgraph has {subgraph.number_of_nodes()} nodes and {subgraph.number_of_edges()} edges.")
-    print(f"The edge data is: {subgraph.edges(data=True)}.")
+    # print(f"Subgraph has {subgraph.number_of_nodes()} nodes and {subgraph.number_of_edges()} edges.")
+    # print(f"The edge data is: {subgraph.edges(data=True)}.")
     return subgraph
