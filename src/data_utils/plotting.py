@@ -16,10 +16,9 @@ def plot_avg_matrices(avg_group1, avg_group2, group1, group2, marker_list, task,
     " Plots the average or std of the kinectomes based on task and direction"
 
     # Define marker ordering
-    left_markers = [m for m in marker_list if m.startswith('l_')]
-    right_markers = [m for m in marker_list if m.startswith('r_')]
-    middle_markers = ['head', 'ster']
-    ordered_marker_list = middle_markers + left_markers + right_markers
+
+    new_order = []
+    ordered_marker_list = marker_list
 
     # Get new indices based on the ordered list
     index_map = {marker: i for i, marker in enumerate(marker_list)}
@@ -34,7 +33,7 @@ def plot_avg_matrices(avg_group1, avg_group2, group1, group2, marker_list, task,
     global_max = max(np.max(reordered_group1), np.max(reordered_group2))
 
     # define the limits of the colour bars
-    norm = plt.Normalize(vmin=0, vmax=global_max)
+    norm = plt.Normalize(vmin=global_min, vmax=global_max)
 
     # Set up figure
     fig, axes = plt.subplots(1, 2, figsize=(12,6))
@@ -614,3 +613,93 @@ def plot_difference_distributions(avg_matrices, tasks, kinematics, directions):
     
     plt.tight_layout()
     return fig
+
+
+# from PIL import Image
+# import os
+# from pathlib import Path
+
+# def stack_images_vertically(image_paths, output_path, spacing=0):
+#     """
+#     Stack PNG images vertically while preserving DPI
+    
+#     Args:
+#         image_paths: List of paths to PNG files (strings or Path objects)
+#         output_path: Path for the output stacked image (string or Path object)
+#         spacing: Optional spacing between images in pixels (default: 0)
+    
+#     Returns:
+#         str: Path to the saved stacked image
+
+
+#         # how to run the stack figure code:
+#         from pathlib import Path
+
+#         # Your directory
+#         figures_dir = Path(r"C:\Users\Karolina\Desktop\pykinectome\writing\figures\patetrn_subfigures")
+
+#         # Get specific files in custom order if needed
+#          png_files = [
+#             figures_dir / "specific_figure1.png",
+#              figures_dir / "specific_figure2.png",
+#             # ... add more in your desired order
+#         ]
+
+#         # Or get all PNG files sorted
+#         png_files = sorted(figures_dir.glob("*.png"))
+
+#         # Stack them
+#         output_path = figures_dir / "my_stacked_figures.png"
+#         stack_images_vertically(png_files, output_path, spacing=20)
+        
+#     """
+#     if not image_paths:
+#         raise ValueError("No image paths provided")
+    
+#     # Convert paths to strings if they're Path objects
+#     image_paths = [str(p) for p in image_paths]
+#     output_path = str(output_path)
+    
+#     # Verify all files exist
+#     missing_files = [p for p in image_paths if not os.path.exists(p)]
+#     if missing_files:
+#         raise FileNotFoundError(f"Missing files: {missing_files}")
+    
+#     # Open all images
+#     images = []
+#     for path in image_paths:
+#         img = Image.open(path)
+#         images.append(img)
+    
+#     # Get the maximum width and calculate total height
+#     max_width = max(img.width for img in images)
+#     total_height = sum(img.height for img in images) + spacing * (len(images) - 1)
+    
+#     # Get DPI from first image (assuming all have same DPI)
+#     dpi = images[0].info.get('dpi', (600, 600))
+    
+#     # Create new image with transparent background
+#     # Use RGBA mode to support transparency
+#     stacked = Image.new('RGBA', (max_width, total_height), (255, 255, 255, 0))
+    
+#     # Paste images vertically
+#     y_offset = 0
+#     for img in images:
+#         # Center the image horizontally if it's narrower than max_width
+#         x_offset = (max_width - img.width) // 2
+        
+#         # Convert to RGBA if not already
+#         if img.mode != 'RGBA':
+#             img = img.convert('RGBA')
+        
+#         stacked.paste(img, (x_offset, y_offset), img)
+#         y_offset += img.height + spacing
+    
+#     # Save with preserved DPI
+#     stacked.save(output_path, dpi=dpi, optimize=True)
+#     print(f"Stacked image saved to {output_path}")
+#     print(f"Final dimensions: {stacked.width}x{stacked.height} at {dpi[0]} DPI")
+    
+#     return output_path
+
+
