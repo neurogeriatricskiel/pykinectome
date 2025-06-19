@@ -27,7 +27,8 @@ def get_adaptive_subgroups(matrix, marker_list):
     else:
         return base_subgroups
 
-def permute(matrix1, matrix2, marker_list, task, matrix_type, kinematic, direction, result_base_path, correlation_method):
+def permute(matrix1, matrix2, marker_list, task, matrix_type, kinematic, direction, result_base_path, correlation_method, n_iter):
+
     
     # Define subgroups of body segments (marker labels) for shuffling
     subgroups = get_adaptive_subgroups(matrix1, marker_list)
@@ -50,7 +51,7 @@ def permute(matrix1, matrix2, marker_list, task, matrix_type, kinematic, directi
     # """Nonparametric permutation testing Monte Carlo"""
     np.random.seed(0)
     rhos = []
-    n_iter = 5000
+    # n_iter = 5000
     true_rho, _ = stats.spearmanr(upper(df_group1), upper(df_group2))
 
     # upper triangle of the matrix 
