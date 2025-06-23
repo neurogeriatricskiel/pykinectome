@@ -60,13 +60,15 @@ DIAGNOSIS = ['diagnosis_parkinson'] # a list of diagnoses of interest
 
 FULL = False # True or False depending if full kinectome (all three directions in one kinectome) should be analysed
 
-CORRELATION = 'cross' # 'pears', 'cross' or 'dcor' are the options, depending on which correlation methods should be used for building the kinectomes
+CORRELATION = 'pears' # 'pears', 'cross' or 'dcor' are the options, depending on which correlation methods should be used for building the kinectomes
 
 PD_ON = ['pp065', 'pp032'] # a list of sub_ids of PD that were measured in on condition
 
 # path where the results of modularity analysis (std within subjects (csv), avg subject allegiance matrices (pkl) are stored)
 RESULT_BASE_PATH = 'C:/Users/Karolina/Desktop/pykinectome/results'
 
+# define the threshold (Two nodes belong to the same community if their allegiance score > threshold)
+COMMUNITY_THRESHOLD = 0.6
 
 
 def main() -> None:
@@ -88,7 +90,8 @@ def main() -> None:
     # # use_two_stage = False --> classic Bonferroni multiple comparisons method is used. True - first screen for patterns p<.01, then apply Bonferroni
     # all_significant_patterns = patterns.multiple_corrections(comparison='control_paths_V_slow_pears.pkl', use_two_stage=False)
 
-    # modularity.modularity_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL, CORRELATION)
+    modularity.modularity_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST_AFFECT, 
+                               RESULT_BASE_PATH, FULL, CORRELATION, COMMUNITY_THRESHOLD)
                             
 
     # centrality.centrality_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST, RESULT_BASE_PATH)

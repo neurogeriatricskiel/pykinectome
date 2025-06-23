@@ -3,6 +3,7 @@ matplotlib.use('Agg')  # Use a non-interactive backend
 import matplotlib.pyplot as plt
 import os
 import numpy as np
+import pandas as pd
 import networkx as nx
 from src.data_utils.data_loader import load_kinectomes
 from src.data_utils import groups
@@ -13,6 +14,9 @@ import pickle
 from pathlib import Path
 from src.data_utils import permutation
 from src.data_utils.plotting import draw_graph_with_selected_weights, draw_graph_with_weights
+from collections import defaultdict
+from scipy import stats
+from sklearn.metrics import adjusted_rand_score
 
 def build_graph(kinectome, marker_list, bound_value=None):
 
@@ -350,33 +354,6 @@ def calculate_avg_allg_mtrx(avg_allegiance_matrices, full):
                             group_avg_matrices[group][task][kinematic][direction] = avg_matrix
    
     return group_avg_matrices
-    #     # Compute averages for each task, kinematic, direction combination
-    #     for task in all_tasks:
-    #         for kinematic in all_kinematics.get(task, {}):
-    #             group_avg_matrices[group][task][kinematic] = {}
-                
-    #             for direction in all_kinematics[task][kinematic]:
-    #                 # Collect matrices for this combination
-    #                 valid_matrices = []
-                    
-    #                 for participant_id, participant_data in participants.items():
-    #                     if (task in participant_data and 
-    #                         kinematic in participant_data[task] and 
-    #                         direction in participant_data[task][kinematic]):
-    #                         # Get the matrix
-    #                         matrix = participant_data[task][kinematic][direction]
-                            
-    #                         # Only include non-None matrices with actual content and correct shape
-    #                         if matrix is not None and hasattr(matrix, 'shape') and matrix.shape == (22, 22):
-    #                             valid_matrices.append(matrix)
-                    
-    #                 # Compute average if we have valid matrices
-    #                 if valid_matrices:
-    #                     # All matrices should be numpy arrays with shape (22, 22)
-    #                     avg_matrix = np.mean(valid_matrices, axis=0)
-    #                     group_avg_matrices[group][task][kinematic][direction] = avg_matrix
-    
-    # return group_avg_matrices
 
 def plot_all_allegiance_matrices(allegiance_matrices, marker_list, result_base_path, correlation_method, full):
     """ visualise and save all group allegiance matrices as .png
@@ -389,22 +366,373 @@ def plot_all_allegiance_matrices(allegiance_matrices, marker_list, result_base_p
                     matrix = allegiance_matrices[group][task][kinematic][direction]
                     plotting.visualise_allegiance_matrix(matrix, marker_list, group, task, kinematic, direction, result_base_path, correlation_method, full)
 
+def plot_all_allegiance_matrices_with_communities(allegiance_matrices, group_communities, marker_list, result_base_path, correlation_method, full):
+    """ visualise and save all group allegiance matrices as .png with community-based ordering
+    """
+   
+    for group in allegiance_matrices.keys():
+        for task in allegiance_matrices[group].keys():
+            for kinematic in allegiance_matrices[group][task].keys():
+                for direction in allegiance_matrices[group][task][kinematic].keys():
+                    matrix = allegiance_matrices[group][task][kinematic][direction]
+                    communities = group_communities[group][task][kinematic][direction]
+                    plotting.visualise_allegiance_matrix_with_communities(matrix, communities, marker_list, group, task, kinematic, direction, result_base_path, correlation_method, full)
+
+def extract_communities_threshold(allegiance_matrix, threshold):
+    """
+    Extract communities using threshold method
+    """
+    n_nodes = allegiance_matrix.shape[0]
+    
+    # Create adjacency matrix based on threshold
+    adj_matrix = (allegiance_matrix >= threshold).astype(int)
+    np.fill_diagonal(adj_matrix, 0)  # Remove self-loops
+    
+    # Create graph and find connected components
+    G = nx.from_numpy_array(adj_matrix)
+    communities = list(nx.connected_components(G))
+    
+    return communities
+
+def calc_subject_communities(avg_subject_allegience_matrices, threshold):
+    """ returns a dictionary with the functional communities based on the threshold method for each subject separately"""
+    all_subject_communities = {}
+
+    for group in avg_subject_allegience_matrices.keys():
+        all_subject_communities[group] = {}
+
+        for sub_id in avg_subject_allegience_matrices[group].keys():
+            all_subject_communities[group][sub_id] = {}
+
+            for task in avg_subject_allegience_matrices[group][sub_id].keys():
+                all_subject_communities[group][sub_id][task] = {}
+
+                for kinematics in avg_subject_allegience_matrices[group][sub_id][task].keys():
+                    all_subject_communities[group][sub_id][task][kinematics] = {}
+
+                    for direction in avg_subject_allegience_matrices[group][sub_id][task][kinematics].keys():
+                        all_subject_communities[group][sub_id][task][kinematics][direction] = {}
+
+                        allegiance_matrix = avg_subject_allegience_matrices[group][sub_id][task][kinematics][direction]
+
+                        if allegiance_matrix is None:
+                            continue
+                        else:
+                            communities = extract_communities_threshold(allegiance_matrix, threshold)
+                            all_subject_communities[group][sub_id][task][kinematics][direction] = communities
+    
+    return all_subject_communities
 
 
-def modularity_main(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list, result_base_path, full, correlation_method):
+def calc_group_communities(average_group_allegiance_matrices, threshold):
+    """ returns a dictionary with the functional communities based on the threshold method - the community structure is for the group """
+
+    group_communities = {}
+
+    for group in average_group_allegiance_matrices.keys():
+        group_communities[group] = {}
+    
+        for task in average_group_allegiance_matrices[group].keys():
+            group_communities[group][task] = {}
+
+            for kinematics in average_group_allegiance_matrices[group][task]:
+                group_communities[group][task][kinematics] = {}
+
+                for direction in average_group_allegiance_matrices[group][task][kinematics].keys():
+                    group_communities[group][task][kinematics][direction] = {}
+
+                    allegiance_matrix = average_group_allegiance_matrices[group][task][kinematics][direction]
+                    communities = extract_communities_threshold(allegiance_matrix, threshold)
+
+                    group_communities[group][task][kinematics][direction] = communities
+    
+    return group_communities
+
+
+def calc_community_fit(subject_communities, group_communities):
+    """Calculate fit between individual and group community structures using ARI."""
+    fits = {}
+    
+    for group in subject_communities:
+        fits[group] = {}
+        for subject in subject_communities[group]:
+            fits[group][subject] = {}
+            for task in subject_communities[group][subject]:
+                fits[group][subject][task] = {}
+                for kinematic in subject_communities[group][subject][task]:
+                    fits[group][subject][task][kinematic] = {}
+                    for direction in subject_communities[group][subject][task][kinematic]:
+                        # Get individual and group communities
+                        ind_comm = subject_communities[group][subject][task][kinematic][direction]
+                        grp_comm = group_communities[group][task][kinematic][direction]
+                        if not bool(ind_comm): # check if the dict is empty for subjects with no data
+                            continue
+                        
+                        # Convert to node labels for ARI calculation
+                        max_node = max(max(comm) for comm in ind_comm + grp_comm)
+                        ind_labels = np.zeros(max_node + 1)
+                        grp_labels = np.zeros(max_node + 1)
+                        
+                        for i, comm in enumerate(ind_comm):
+                            for node in comm:
+                                ind_labels[node] = i
+                        
+                        for i, comm in enumerate(grp_comm):
+                            for node in comm:
+                                grp_labels[node] = i
+                        
+                        # Calculate ARI as fit measure
+                        fits[group][subject][task][kinematic][direction] = adjusted_rand_score(ind_labels, grp_labels)
+    
+    return fits
+
+def calc_community_fit_stats(fits):
+    """Compare fits between two groups using appropriate statistical test."""
+    results = {}
+
+    group1 = list(fits.keys())[0]
+    group2 = list(fits.keys())[1]
+
+    # Get all combinations of task/kinematic/direction
+    all_combinations = set()
+    for group in fits:
+        for subject in fits[group]:
+            for task in fits[group][subject]:
+                for kinematic in fits[group][subject][task]:
+                    for direction in fits[group][subject][task][kinematic]:
+                        all_combinations.add((task, kinematic, direction))
+    
+    for task, kinematic, direction in all_combinations:
+        # Extract fits for both groups
+        g1_fits = [fits[group1][subj][task][kinematic][direction] 
+                   for subj in fits[group1] 
+                   if task in fits[group1][subj] and kinematic in fits[group1][subj][task] 
+                   and direction in fits[group1][subj][task][kinematic]]
+        
+        g2_fits = [fits[group2][subj][task][kinematic][direction] 
+                   for subj in fits[group2] 
+                   if task in fits[group2][subj] and kinematic in fits[group2][subj][task] 
+                   and direction in fits[group2][subj][task][kinematic]]
+        
+        if len(g1_fits) < 3 or len(g2_fits) < 3:
+            continue
+            
+        # Test normality
+        _, p1 = stats.shapiro(g1_fits)
+        _, p2 = stats.shapiro(g2_fits)
+        
+        # Choose appropriate test
+        if p1 > 0.05 and p2 > 0.05:
+            # Both normal - use t-test
+            stat, p = stats.ttest_ind(g1_fits, g2_fits, alternative='less')  # Test if g1 < g2
+            test_used = 'ttest'
+        else:
+            # Non-normal - use Mann-Whitney U
+            stat, p = stats.mannwhitneyu(g1_fits, g2_fits, alternative='less')
+            test_used = 'mannwhitney'
+        
+        results[(task, kinematic, direction)] = {
+            'group1_mean': np.mean(g1_fits),
+            'group2_mean': np.mean(g2_fits),
+            'statistic': stat,
+            'p_value': np.round(p, 3),
+            'test_used': test_used,
+            'n1': len(g1_fits),
+            'n2': len(g2_fits)
+        }
+    
+    return pd.DataFrame(results)
+
+def calculate_modularity_scores(avg_subject_allegiance_matrices, average_group_allegiance_matrices, group_communities):
+    """Calculate modularity scores for group communities and individual subjects."""
+    group_modularity = {}
+    subject_modularity = {}
+    
+    for group in group_communities:
+        group_modularity[group] = {}
+        subject_modularity[group] = {}
+        
+        for task in group_communities[group]:
+            group_modularity[group][task] = {}
+            subject_modularity[group][task] = {}
+            
+            for kinematic in group_communities[group][task]:
+                group_modularity[group][task][kinematic] = {}
+                subject_modularity[group][task][kinematic] = {}
+                
+                for direction in group_communities[group][task][kinematic]:
+                    communities = group_communities[group][task][kinematic][direction]
+                    
+                    # Group modularity using group allegiance matrix
+                    group_matrix = average_group_allegiance_matrices[group][task][kinematic][direction]
+                    G_group = nx.from_numpy_array(group_matrix)
+                    group_modularity[group][task][kinematic][direction] = nx.community.modularity(G_group, communities, weight='weight')
+                    
+                    # Subject modularity scores
+                    subject_modularity[group][task][kinematic][direction] = {}
+                    for subject in avg_subject_allegiance_matrices[group]:
+                        if task in avg_subject_allegiance_matrices[group][subject] and \
+                           kinematic in avg_subject_allegiance_matrices[group][subject][task] and \
+                           direction in avg_subject_allegiance_matrices[group][subject][task][kinematic]:
+                            
+                            subj_matrix = avg_subject_allegiance_matrices[group][subject][task][kinematic][direction]
+                            if subj_matrix is None:
+                                continue 
+                            elif len(communities) <= 1:
+                                subject_modularity[group][task][kinematic][direction][subject] = np.nan
+                            else:    
+                                G_subj = nx.from_numpy_array(subj_matrix)
+                                subject_modularity[group][task][kinematic][direction][subject] = nx.community.modularity(G_subj, communities, weight='weight')
+          
+    return group_modularity, subject_modularity
+
+
+def compare_modularity_between_groups(subject_modularity):
+    """Compare modularity scores between groups using appropriate statistical test."""
+    results = {}
+    
+    group1 = list(subject_modularity.keys())[0]
+    group2 = list(subject_modularity.keys())[1]
+
+    # Get all combinations
+    all_combinations = set()
+    for group in subject_modularity:
+        for task in subject_modularity[group]:
+            for kinematic in subject_modularity[group][task]:
+                for direction in subject_modularity[group][task][kinematic]:
+                    all_combinations.add((task, kinematic, direction))
+    
+    for task, kinematic, direction in all_combinations:
+        # Extract modularity scores
+        g1_scores = list(subject_modularity[group1][task][kinematic][direction].values()) if \
+                   task in subject_modularity[group1] and kinematic in subject_modularity[group1][task] and \
+                   direction in subject_modularity[group1][task][kinematic] else []
+        
+        g2_scores = list(subject_modularity[group2][task][kinematic][direction].values()) if \
+                   task in subject_modularity[group2] and kinematic in subject_modularity[group2][task] and \
+                   direction in subject_modularity[group2][task][kinematic] else []
+        
+        if len(g1_scores) < 3 or len(g2_scores) < 3:
+            continue
+        
+        # Test normality and choose appropriate test
+        _, p1 = stats.shapiro(g1_scores)
+        _, p2 = stats.shapiro(g2_scores)
+        
+        if p1 > 0.05 and p2 > 0.05:
+            stat, p = stats.ttest_ind(g1_scores, g2_scores)
+            test_used = 'ttest'
+        else:
+            stat, p = stats.mannwhitneyu(g1_scores, g2_scores)
+            test_used = 'mannwhitney'
+        
+        results[(task, kinematic, direction)] = {
+            'group1_mean': np.mean(g1_scores),
+            'group2_mean': np.mean(g2_scores),
+            'group1_std': np.std(g1_scores),
+            'group2_std': np.std(g2_scores),
+            'statistic': stat,
+            'p_value': np.round(p, 3),
+            'test_used': test_used,
+            'n1': len(g1_scores),
+            'n2': len(g2_scores)
+        }
+    
+    return pd.DataFrame(results)
+
+def calculate_within_community_density(avg_subject_allegiance_matrices, average_group_allegiance_matrices, group_communities):
+    """Calculate within-community density for each community with community identification."""
+    group_densities = {}
+    subject_densities = {}
+    
+    for group in group_communities:
+        group_densities[group] = {}
+        subject_densities[group] = {}
+        
+        for task in group_communities[group]:
+            group_densities[group][task] = {}
+            subject_densities[group][task] = {}
+            
+            for kinematic in group_communities[group][task]:
+                group_densities[group][task][kinematic] = {}
+                subject_densities[group][task][kinematic] = {}
+                
+                for direction in group_communities[group][task][kinematic]:
+                    communities = group_communities[group][task][kinematic][direction]
+                    
+                    # Group within-community densities
+                    group_matrix = average_group_allegiance_matrices[group][task][kinematic][direction]
+                    group_densities[group][task][kinematic][direction] = {}
+                    
+                    for i, community in enumerate(communities):
+                        nodes = list(community)
+                        community_key = f"community_{i}_nodes_{sorted(nodes)}"
+                        
+                        if len(nodes) > 1:
+                            submatrix = group_matrix[np.ix_(nodes, nodes)]
+                            mask = np.triu(np.ones_like(submatrix, dtype=bool), k=1)
+                            density = np.mean(submatrix[mask]) if mask.sum() > 0 else 0
+                        else:
+                            density = 0
+                        group_densities[group][task][kinematic][direction][community_key] = density
+                    
+                    # Subject within-community densities
+                    subject_densities[group][task][kinematic][direction] = {}
+                    for subject in avg_subject_allegiance_matrices[group]:
+                        if task in avg_subject_allegiance_matrices[group][subject] and \
+                           kinematic in avg_subject_allegiance_matrices[group][subject][task] and \
+                           direction in avg_subject_allegiance_matrices[group][subject][task][kinematic]:
+                            
+                            subj_matrix = avg_subject_allegiance_matrices[group][subject][task][kinematic][direction]
+
+                            if subj_matrix is None:
+                                continue
+                            else:
+                                subject_densities[group][task][kinematic][direction][subject] = {}
+                            
+                            for i, community in enumerate(communities):
+                                nodes = list(community)
+                                community_key = f"community_{i}_nodes_{sorted(nodes)}"
+                                
+                                if len(nodes) > 1:
+                                    submatrix = subj_matrix[np.ix_(nodes, nodes)]
+                                    mask = np.triu(np.ones_like(submatrix, dtype=bool), k=1)
+                                    density = np.mean(submatrix[mask]) if mask.sum() > 0 else 0
+                                else:
+                                    density = 0
+                                subject_densities[group][task][kinematic][direction][subject][community_key] = density
+    
+    return group_densities, subject_densities
+
+def modularity_main(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list, result_base_path, full, correlation_method, threshold):
     
     
-    avg_subject_allegience_matrices, std_subject_allegience_matrices = load_allegiance_matrices(diagnosis, kinematics_list, task_names, 
+    avg_subject_allegiance_matrices, std_subject_allegience_matrices = load_allegiance_matrices(diagnosis, kinematics_list, task_names, 
                                                                                 tracking_systems, runs, pd_on, base_path,
                                                                                 marker_list, result_base_path, full, correlation_method)
     
-
-    average_group_allegiance_matrices = calculate_avg_allg_mtrx(avg_subject_allegience_matrices, full)
+    subject_communities = calc_subject_communities(avg_subject_allegiance_matrices, threshold)
+    
+    average_group_allegiance_matrices = calculate_avg_allg_mtrx(avg_subject_allegiance_matrices, full)
     std_group_allegiance_matrices = calculate_avg_allg_mtrx(std_subject_allegience_matrices, full)
     
-    # comment out once all the plots are generated
-    # plot_all_allegiance_matrices(average_group_allegiance_matrices, marker_list, result_base_path, correlation_method, full)
+    group_communities = calc_group_communities(average_group_allegiance_matrices, threshold)
 
+    # comment out once all the plots are generated
+    # plot_all_allegiance_matrices_with_communities(average_group_allegiance_matrices, group_communities, marker_list, result_base_path, correlation_method, full)
+
+    # check the how well the individual community structure fits the group community structure (using adjusted rand index)
+    community_fit = calc_community_fit(subject_communities, group_communities)    
+    community_fit_stats = calc_community_fit_stats(community_fit)
+    
+    # check the modularity (strength of the connections) in the communities
+    group_modularity, subject_modularity = calculate_modularity_scores(avg_subject_allegiance_matrices, average_group_allegiance_matrices, group_communities)
+    modularity_stats = compare_modularity_between_groups(subject_modularity)
+
+    # Get within-community densities
+    group_densities, subject_densities = calculate_within_community_density(avg_subject_allegiance_matrices, average_group_allegiance_matrices, group_communities)
+    
+    
     task ='walkSlow'
     matrix_type ='allegiance_avg'
     kinematic = 'acc'
@@ -414,5 +742,5 @@ def modularity_main(diagnosis, kinematics_list, task_names, tracking_systems, ru
     matrix2 = average_group_allegiance_matrices['Control'][task][kinematic][direction]
 
 
-    permutation.permute(matrix1, matrix2, marker_list, task, matrix_type, kinematic, direction, result_base_path, correlation_method)
+    permutation.permute(matrix1, matrix2, marker_list, task, matrix_type, kinematic, direction, result_base_path, correlation_method, n_iter = 5000)
     return None
