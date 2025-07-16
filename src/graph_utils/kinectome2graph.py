@@ -56,3 +56,12 @@ def cc_connected_components(G):
 def clustering_coef(G):
     """Calculates clustering coefficients for each node in the graph."""
     return nx.clustering(G)
+
+def jaccard_complete_communities(comm1,comm2):
+    """Calculates Jaccard similarity between two node sets of communities.
+    parameters: 
+    comm1, comm2: sets or list of nodes in the  communities
+    """
+    intersection = len(set(comm1) & set(comm2))
+    union = len(set(comm1) | set(comm2))
+    return intersection / union if union > 0 else 0
