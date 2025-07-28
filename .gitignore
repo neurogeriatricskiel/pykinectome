@@ -6,6 +6,7 @@ allegiance_matrix*
 pp0*
 std_*
 *.png
+src/data_utils/plotting_for_manuscript.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
