@@ -14,9 +14,9 @@ def get_adaptive_subgroups(matrix, marker_list):
     If matrix shape doesn't match marker_list length, expand the marker lists.
     """
     base_subgroups = {
-        "upper_body": ['head', 'ster', 'sho_la', 'sho_ma', 'asis_la', 'asis_ma', 'psis_la', 'psis_ma',
-                    'elbl_la', 'wrist_la', 'hand_la', 'elbl_ma', 'wrist_ma', 'hand_ma'],
-        "lower_body": ['th_la', 'sk_la', 'ank_la', 'toe_la', 'th_ma', 'sk_ma', 'ank_ma', 'toe_ma']
+        "upper_body": ['head', 'sternum', 'shoulder_las', 'shoulder_mas', 'asis_las', 'asis_mas', 'psis_las', 'psis_mas',
+                    'elbow_las', 'wrist_las', 'hand_las', 'elbow_mas', 'wrist_mas', 'hand_mas'],
+        "lower_body": ['thigh_las', 'shank_las', 'ankle_las', 'toe_las', 'thigh_mas', 'shank_mas', 'ankle_mas', 'toe_mas']
     }
     
     # Check if expansion is needed
