@@ -9,65 +9,193 @@ from scipy.spatial.distance import squareform, pdist
 import networkx as nx
 import os
 from src.data_utils.permutation import expand_marker_list
-
+from matplotlib.patches import Rectangle
 from tqdm import tqdm
 
-def plot_avg_matrices(avg_group1, avg_group2, group1, group2, marker_list, task, direction, matrix_type, result_base_path, rho, p_value):
-    " Plots the average or std of the kinectomes based on task and direction"
 
+
+def plot_avg_matrices(avg_group1, avg_group2, group1, group2, marker_list, task, direction, matrix_type, result_base_path, rho, p_value, suptitle, figname):
+    
+    """Plots the average or std of the kinectomes based on task and direction"""
+    
     # Define marker ordering
-
-    new_order = []
     ordered_marker_list = marker_list
-
-    # Get new indices based on the ordered list
     index_map = {marker: i for i, marker in enumerate(marker_list)}
     new_order = [index_map[m] for m in ordered_marker_list]
-
+    
     # Reorder matrices
     reordered_group1 = avg_group1[np.ix_(new_order, new_order)]
     reordered_group2 = avg_group2[np.ix_(new_order, new_order)]
-
+    
+    # Create triangular masks (keep only lower triangle)
+    mask = np.triu(np.ones_like(reordered_group1, dtype=bool), k=1)
+    
     # Find global min/max for consistent color scaling
     global_min = min(np.min(reordered_group1), np.min(reordered_group2))
     global_max = max(np.max(reordered_group1), np.max(reordered_group2))
-
-    # define the limits of the colour bars
-    norm = plt.Normalize(vmin=global_min, vmax=global_max)
-
-    # Set up figure
-    fig, axes = plt.subplots(1, 2, figsize=(12,6))
-
-    # Plot Parkinson's group
-    ax1 = axes[0]
-    sns.heatmap(reordered_group2, cmap='coolwarm', norm = norm, center=0, xticklabels=ordered_marker_list, yticklabels=ordered_marker_list, ax=ax1)
-    ax1.set_title(f'{group2} {matrix_type} matrix\nTask: {task}, Direction: {direction}')
+    
+    # Create figure with gridspec for better control
+    fig = plt.figure(figsize=(12, 6))
+    gs = gridspec.GridSpec(1, 3, width_ratios=[1, 1, 0.05], wspace=0.3)
+    
+    # Create axes for the two heatmaps and colorbar
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax2 = fig.add_subplot(gs[0, 1])
+    cbar_ax = fig.add_subplot(gs[0, 2])
+    
+    # Plot Control group (left)
+    im1 = sns.heatmap(reordered_group2, 
+                      mask=mask,
+                      cmap='coolwarm', 
+                      vmin=global_min, 
+                      vmax=global_max,
+                      center=0,
+                      xticklabels=ordered_marker_list, 
+                      yticklabels=ordered_marker_list, 
+                      ax=ax1,
+                      cbar=False)
+    ax1.set_title(f'{"Controls" if group2 else ""}')
     ax1.set_xticklabels(ordered_marker_list, rotation=90)
     ax1.set_yticklabels(ordered_marker_list, rotation=0)
-
-    # Plot Control group
-    ax2 = axes[1]
-    sns.heatmap(reordered_group1, cmap='coolwarm', norm = norm, center=0, xticklabels=ordered_marker_list, yticklabels=ordered_marker_list, ax=ax2)
-    ax2.set_title(f'{group1} {matrix_type} matrix\nTask: {task}, Direction: {direction}')
+    
+    # Plot Parkinson's group (right)
+    im2 = sns.heatmap(reordered_group1, 
+                      mask=mask,
+                      cmap='coolwarm', 
+                      vmin=global_min, 
+                      vmax=global_max,
+                      center=0,
+                      xticklabels=ordered_marker_list, 
+                      yticklabels=False,  # Remove y-labels from right plot
+                      ax=ax2,
+                      cbar=False)
+    ax2.set_title(f'{"PD" if group1 else ""}')
     ax2.set_xticklabels(ordered_marker_list, rotation=90)
-    ax2.set_yticklabels(ordered_marker_list, rotation=0)
-
-    plt.tight_layout()
-    plt.suptitle(f"Spearman's rho = {np.round(rho, 3)}, p_value = {np.round(p_value, 3)}")
-
-    # Define result path
+    
+    # Add single colorbar using the actual heatmap data
+    cbar = fig.colorbar(im1.get_children()[0], cax=cbar_ax)
+    
+    # Add suptitle with correlation info and more top space
+    plt.suptitle(f"{suptitle}\nSpearman's rho = {rho:.3f}, p_value = {p_value:.3f}", y=1.05)
+    
+    # Create result folder and save
     result_folder = Path(result_base_path) / "avg_std_matrices"
-
-    # Create the folder if it does not exist
     result_folder.mkdir(parents=True, exist_ok=True)
-
-    # Define the save path for the figure
-    save_path = result_folder / f"avg_matrices_{task}_{direction}_{matrix_type}.png"
-
-    # Save the figure
+    
+    save_path = result_folder / figname
     plt.savefig(save_path, dpi=600, bbox_inches='tight')
+    plt.close()  # Close the figure to free memory
 
 
+
+def visualise_allegiance_matrix_with_communities(allegiance_matrix, communities, marker_list, group, task_name, kinematic, direction, result_base_path, correlation_method, full):
+    """
+    Plot allegiance matrix with community-based reordering and visual community separation.
+   
+    Parameters:
+    -----------
+    allegiance_matrix : numpy.ndarray
+        The allegiance matrix to visualize
+    communities : list of sets
+        List of communities, each containing node indices
+    marker_list : list
+        List of marker names corresponding to the rows/columns of the allegiance matrix
+    group : str
+        Group name (e.g., 'Parkinson', 'Control')
+    task_name : str
+        Task name (e.g., 'walkPreferred')
+    kinematic : str
+        Kinematic type (e.g., 'acc', 'vel')
+    direction : str
+        Direction (e.g., 'AP', 'ML', 'V')
+    result_base_path : str or Path
+        Base path for saving results
+    """
+    
+    # Expand marker list if needed for full matrix
+    current_marker_list = marker_list.copy()
+    if allegiance_matrix.shape != (len(marker_list), len(marker_list)):
+        current_marker_list = expand_marker_list(marker_list)
+    
+    # Create community-based ordering
+    community_order = []
+    community_boundaries = [0]  # Track boundaries for visual separation
+    
+    for community in communities:
+        community_nodes = sorted(list(community))  # Sort within community for consistency
+        community_order.extend(community_nodes)
+        community_boundaries.append(len(community_order))
+    
+    # Reorder matrix and labels
+    reordered_matrix = allegiance_matrix[np.ix_(community_order, community_order)]
+    reordered_labels = [current_marker_list[i] for i in community_order]
+    
+    # Create the plot
+    plt.figure(figsize=(15, 12))
+    
+    # Create heatmap
+    ax = sns.heatmap(reordered_matrix, 
+                     cmap="viridis", 
+                     xticklabels=reordered_labels, 
+                     yticklabels=reordered_labels,
+                     cbar_kws={'label': 'Allegiance Probability'})
+    
+    # # Add community separation lines
+    # for boundary in community_boundaries[1:-1]:  # Skip first (0) and last boundary
+    #     ax.axhline(y=boundary, color='red', linewidth=2)
+    #     ax.axvline(x=boundary, color='red', linewidth=2)
+
+    # # Add boxes around each community
+    for i in range(len(community_boundaries) - 1):
+        # Get the start and end index for the current community
+        start_idx = community_boundaries[i]
+        end_idx = community_boundaries[i+1]
+
+        # Calculate the size of the square
+        size = end_idx - start_idx
+
+        # Create a Rectangle patch
+        rect = Rectangle(
+            (start_idx, start_idx),  # (x,y) bottom-left corner
+            size,                    # width
+            size,                    # height
+            linewidth=2,
+            edgecolor='red',
+            facecolor='none'         # Make the rectangle transparent
+        )
+
+        # Add the rectangle to the plot
+        ax.add_patch(rect)
+    
+    # Add community labels
+    for i, community in enumerate(communities):
+        start_idx = community_boundaries[i]
+        end_idx = community_boundaries[i + 1]
+        mid_point = (start_idx + end_idx) / 2
+        
+        # Add text annotation for community
+        ax.text(mid_point, -1, f'Community{i+1}', ha='center', va='top', fontweight='bold', fontsize=12)
+        # ax.text(-1, mid_point, f'Community{i+1}', ha='right', va='center', fontweight='bold', fontsize=12, rotation=90)
+    
+    plt.title(f"Allegiance Matrix - {group} group during {task_name} in {direction} direction ({kinematic} data)\n"
+              f"Communities: {len(communities)} detected", fontsize=16, y=1.05)
+    
+    # Rotate x-axis labels for better readability
+    plt.xticks(rotation=45, ha='right')
+    plt.yticks(rotation=0)
+    
+    # Define result path
+    result_folder = Path(result_base_path) / "allegiance_matrices_with_communities"
+    result_folder.mkdir(parents=True, exist_ok=True)
+    
+    # Define save path for the figure
+    save_path = result_folder / f"community_ordered_allegiance_{group}_{task_name}_{kinematic}_{correlation_method}{'_full' if full else direction}.png"
+    
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=600, bbox_inches='tight')
+    plt.close()  # Close figure to free memory
+    
+    print(f"Saved community-ordered allegiance matrix: {save_path}")
 
 def visualise_allegiance_matrix(allegiance_matrix, marker_list, group, task_name, kinematic, direction, result_base_path, correlation_method, full):
     """
