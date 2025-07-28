@@ -11,6 +11,7 @@ from statsmodels.stats.dist_dependence_measures import distance_correlation
 from tqdm import tqdm
 from src.data_utils.plotting import visualise_kinectome
 from pathlib import Path
+from scipy import interpolate
 
 def find_gait_cycles(base_path, data: pd.DataFrame, sub_id: str, task_name: str, run: str, linux: bool):
     """
@@ -199,7 +200,8 @@ def distance_correlation_matrix(data: pd.DataFrame, markers_list: list):
 def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: str, tracksys: str, kinematics: str, base_path: str, result_base_path: str, marker_list: list, 
                         full_kinectomes, 
                         correlation_method,
-                        linux = False, 
+                        linux = False,
+                        interpol = False 
                         ):
     """
     Computes Pearson correlation matrices for marker positions in x, y, and z coordinates across gait cycles 
@@ -227,6 +229,24 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
         cycle_indices = gait_cycles[i]
 
         gait_cycle_data = segment_data(data, cycle_indices)
+
+        if interpol:
+            # Assuming your data is in a DataFrame called 'df'
+            original_length = len(gait_cycle_data)
+            target_length = 500
+
+            # Create original and target time indices
+            original_indices = np.arange(original_length)
+            target_indices = np.linspace(0, original_length-1, target_length)
+
+            # Interpolate each column
+            interpolated_data = {}
+            for column in gait_cycle_data.columns:
+                f = interpolate.interp1d(original_indices, gait_cycle_data[column], kind='linear')
+                interpolated_data[column] = f(target_indices)
+
+            # Create new DataFrame
+            gait_cycle_data = pd.DataFrame(interpolated_data)
 
         # Extract marker names
         marker_names = sorted(set(col[:-6] for col in gait_cycle_data.columns if col.endswith(f'{kinematics.upper()}_x')))
@@ -321,7 +341,7 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
                     file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_cross.npy"
                     file_name_timeLag = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_time_lag.npy"
                 else:
-                    file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_pears.npy"
+                    file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_pears{'_interpol' if interpol else ''}.npy"
             else: 
                 if correlation_method == 'dcor':
                     file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_dcor.npy"
@@ -329,7 +349,7 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
                     file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_cross.npy"
                     file_name_timeLag = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_time_lag.npy"
                 else:
-                    file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_pears.npy"
+                    file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_pears{'_interpol' if interpol else ''}.npy"
         
         file_path = os.path.join(kinectome_path, file_name)
         
@@ -354,7 +374,7 @@ def calculate_kinectome(data: pd.DataFrame, sub_id: str, task_name: str, run: st
 
 
 def calculate_all_kinectomes(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, raw_data_path, fs, 
-                             base_path, marker_list, result_base_path, full, correlation_method) -> None:
+                             base_path, marker_list, result_base_path, full, correlation_method, interpol) -> None:
     """
     Calculates kinectomes for all subejcts. 
     This function iterates over a predefined list of subjects, tasks, tracking systems, and kinematic data types     
@@ -388,7 +408,7 @@ def calculate_all_kinectomes(diagnosis, kinematics_list, task_names, tracking_sy
     disease_sub_ids, matched_control_sub_ids = groups.define_groups(diagnosis)
 
     # use for debugging particular subjects
-    debug_ids = ['pp032']
+    debug_ids = ['pp148']
 
     # file name is based on task names and tracking systems defined in the global variables
  
@@ -441,7 +461,7 @@ def calculate_all_kinectomes(diagnosis, kinematics_list, task_names, tracking_sy
 
                             # calculates the kinectomes in AP, ML and V directions and saves as .npy files
                             calculate_kinectome(preprocessed_data, sub_id, task_name, run, tracksys, kinematics, base_path, result_base_path, 
-                                                marker_list, full, correlation_method)
+                                                marker_list, full, correlation_method, interpol)
                         else:
                             print(f"No matching motion file found for sub-{sub_id}, task-{task_name}, tracksys-{tracksys}, run-{run}")
  
