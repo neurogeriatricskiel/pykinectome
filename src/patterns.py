@@ -532,12 +532,12 @@ def multiple_corrections(comparison, use_two_stage):
     
     return all_significant_patterns
 
-def patterns_stat_analysis(marker_list_affect, diagnosis, kinematics, task_names, tracking_systems, run, pd_on, base_path, result_base_path, full, correlation, pickle_name):
+def patterns_stat_analysis(marker_list_affect, diagnosis, kinematics, task_names, tracking_systems, run, pd_on, base_path, result_base_path, full, correlation, pickle_name, interpol):
     all_results = {}
     for pattern_length in range(2, 21):
         for start_node in marker_list_affect:
-            stat_analysis_dict = patterns_main(diagnosis, kinematics, task_names, tracking_systems, run, pd_on, base_path, result_base_path, full, correlation, 
-                        pattern_length, start_node, save_csv=False)
+            stat_analysis_dict = patterns_main(diagnosis, kinematics, task_names, tracking_systems, run, pd_on, base_path, 
+                                               marker_list_affect, result_base_path, full, correlation, pattern_length, start_node, interpol, save_csv=False)
             
             if stat_analysis_dict is not None:
                 # all_results[(pattern_length, start_node)] = stat_analysis_dict
@@ -554,12 +554,12 @@ def patterns_stat_analysis(marker_list_affect, diagnosis, kinematics, task_names
 
 def patterns_main(diagnosis_list, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list_affect, 
                   result_base_path, full, correlation_method,
-                  pattern_length, start_node, save_csv):
+                  pattern_length, start_node, interpol, save_csv):
     
     ''' The main function to run the pattern analysis (defining patterns of n length)
     '''
 
-    all_kinectomes = calc_std_avg_matrices(diagnosis_list, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, full, correlation_method)
+    all_kinectomes = calc_std_avg_matrices(diagnosis_list, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, full, correlation_method, interpol)
 
     # get strongest patterns of a given length and starting a given node for each subject
     subject_patterns = get_pattern_for_subject(all_kinectomes, marker_list_affect, full, pattern_length, start_node)
@@ -573,7 +573,7 @@ def patterns_main(diagnosis_list, kinematics_list, task_names, tracking_systems,
 
     # input for statistical comparisons
 
-    pattern_group1 = 'Parkinson' # which group pattern to take for comparison
+    pattern_group1 = 'Control' # which group pattern to take for comparison
     subject_group1 = 'Parkinson' # group #1 for comparison
     subject_group2 = 'Control' # group #2 for comparison
     kinematics = 'acc'
