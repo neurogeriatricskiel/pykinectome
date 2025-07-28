@@ -5,7 +5,7 @@ from src.preprocessing.filter import (
 from src.data_utils import groups
 # from src.kinectome import calculate_crl_mtrx
 from src.preprocessing import preprocessing
-from src import kinectome, modularity, kinectome_characteristics, time_lag, patterns
+from src import kinectome, modularity, kinectome_characteristics, time_lag, patterns, centrality
 from pathlib import Path
 import sys
 import pandas as pd
@@ -49,11 +49,11 @@ MARKER_LIST = ['head', 'ster', 'l_sho', 'r_sho',
                 'l_ank', 'r_ank', 'l_toe', 'r_toe']
 
 MARKER_LIST_AFFECT = [
-        'head', 'ster',
-        'sho_la', 'sho_ma', 'elbl_la', 'elbl_ma', 'wrist_la', 'wrist_ma', 'hand_la', 'hand_ma',
-        'asis_la', 'asis_ma', 'psis_la', 'psis_ma',
-        'th_la', 'th_ma', 'sk_la', 'sk_ma',
-        'ank_la', 'ank_ma', 'toe_la', 'toe_ma'
+        'head', 'sternum',
+        'shoulder_las', 'shoulder_mas', 'elbow_las', 'elbow_mas', 'wrist_las', 'wrist_mas', 'hand_las', 'hand_mas',
+        'asis_las', 'asis_mas', 'psis_las', 'psis_mas',
+        'thigh_las', 'thigh_mas', 'shank_las', 'shank_mas',
+        'ankle_las', 'ankle_mas', 'toe_las', 'toe_mas'
     ] # desired order of markers after sorting more and less affected sides 
     
 DIAGNOSIS = ['diagnosis_parkinson'] # a list of diagnoses of interest
@@ -70,31 +70,37 @@ RESULT_BASE_PATH = 'C:/Users/Karolina/Desktop/pykinectome/results'
 # define the threshold (Two nodes belong to the same community if their allegiance score > threshold)
 COMMUNITY_THRESHOLD = 0.6
 
+# define the method for community clustering (louvain or leiden)
+### atm leiden doesn't work
+CLUSTERING_METHOD = 'louvain'
+
+# pass if kienctomes built with interpolated data (=True) should be used for the analysis
+INTERPOL = True
 
 def main() -> None:
     
     # can be done once since it saves the kinectomes as .npy files in the derived_data 
-    # kinectome.calculate_all_kinectomes(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, RAW_DATA_PATH, FS, BASE_PATH, MARKER_LIST, RESULT_BASE_PATH, FULL, CORRELATION) 
+    # kinectome.calculate_all_kinectomes(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, RAW_DATA_PATH, FS, BASE_PATH, MARKER_LIST, RESULT_BASE_PATH, FULL, CORRELATION, INTERPOL) 
     
     # investigate kinectome characteristics (mean and standard deviation of the kinectomes)
     # uses permutation analysis (Spearman's rho) to check if the matrices correlate with one another 
-    kinectome_characteristics.compare_between_groups(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL, CORRELATION)
+    # kinectome_characteristics.compare_between_groups(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL, CORRELATION, INTERPOL)
 
     # time_lag.time_lag_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL)
 
     # First pass: collect all results
-    # pickle_name = 'PD_paths_AP_fast_dcor.pkl' # depends on the group paths, direction, walking speed, and correlation type
-    # patterns.patterns_stat_analysis(MARKER_LIST_AFFECT, DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH,  RESULT_BASE_PATH, FULL, CORRELATION, pickle_name)
+    pickle_name = 'control_paths_AP_fast_pears_interpol.pkl' # depends on the group paths, direction, walking speed, and correlation type
+    # patterns.patterns_stat_analysis(MARKER_LIST_AFFECT, DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH,  RESULT_BASE_PATH, FULL, CORRELATION, pickle_name, INTERPOL)
 
     # # comparison - pickle file containing all statistics for the speed, direction, correlation method and group where the patterns were found
     # # use_two_stage = False --> classic Bonferroni multiple comparisons method is used. True - first screen for patterns p<.01, then apply Bonferroni
-    # all_significant_patterns = patterns.multiple_corrections(comparison='control_paths_V_slow_pears.pkl', use_two_stage=False)
+    all_significant_patterns = patterns.multiple_corrections(comparison='control_paths_AP_fast_pears_interpol.pkl', use_two_stage=False)
 
-    modularity.modularity_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST_AFFECT, 
-                               RESULT_BASE_PATH, FULL, CORRELATION, COMMUNITY_THRESHOLD)
+    # modularity.modularity_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST_AFFECT, 
+    #                            RESULT_BASE_PATH, FULL, CORRELATION, COMMUNITY_THRESHOLD, CLUSTERING_METHOD)
                             
 
-    # centrality.centrality_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST, RESULT_BASE_PATH)
+    # centrality.centrality_main(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL, CORRELATION)
 
     
 
