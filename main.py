@@ -80,7 +80,7 @@ INTERPOL = True
 def main() -> None:
     
     # can be done once since it saves the kinectomes as .npy files in the derived_data 
-    # kinectome.calculate_all_kinectomes(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, RAW_DATA_PATH, FS, BASE_PATH, MARKER_LIST, RESULT_BASE_PATH, FULL, CORRELATION, INTERPOL) 
+    kinectome.calculate_all_kinectomes(DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, RAW_DATA_PATH, FS, BASE_PATH, MARKER_LIST, RESULT_BASE_PATH, FULL, CORRELATION, INTERPOL) 
     
     # investigate kinectome characteristics (mean and standard deviation of the kinectomes)
     # uses permutation analysis (Spearman's rho) to check if the matrices correlate with one another 
@@ -90,7 +90,7 @@ def main() -> None:
 
     # First pass: collect all results
     pickle_name = 'control_paths_AP_fast_pears_interpol.pkl' # depends on the group paths, direction, walking speed, and correlation type
-    # patterns.patterns_stat_analysis(MARKER_LIST_AFFECT, DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH,  RESULT_BASE_PATH, FULL, CORRELATION, pickle_name, INTERPOL)
+    patterns.patterns_stat_analysis(MARKER_LIST_AFFECT, DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON, BASE_PATH,  RESULT_BASE_PATH, FULL, CORRELATION, pickle_name, INTERPOL)
 
     # # comparison - pickle file containing all statistics for the speed, direction, correlation method and group where the patterns were found
     # # use_two_stage = False --> classic Bonferroni multiple comparisons method is used. True - first screen for patterns p<.01, then apply Bonferroni
