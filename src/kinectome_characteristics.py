@@ -10,7 +10,7 @@ from numpy.linalg import norm
 
 
 
-def calc_std_avg_matrices(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, full, correlation_method):
+def calc_std_avg_matrices(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, full, correlation_method, interpol):
     disease_sub_ids, matched_control_sub_ids = groups.define_groups(diagnosis)
 
     # Choose what to store based on the `full` flag
@@ -46,7 +46,7 @@ def calc_std_avg_matrices(diagnosis, kinematics_list, task_names, tracking_syste
                         else:
                             run = run
                         
-                        kinectomes = load_kinectomes(base_path, sub_id, task_name, tracksys, run, kinematics, full, correlation_method)
+                        kinectomes = load_kinectomes(base_path, sub_id, task_name, tracksys, run, kinematics, full, correlation_method, interpol)
                         
                         try:
                             if not full:
@@ -96,7 +96,8 @@ def calc_std_avg_matrices(diagnosis, kinematics_list, task_names, tracking_syste
 
     return variability_scores
 
-def permutation_test_one_p(variability_scores, task_names, kinematics_list, marker_list, result_base_path, matrix_type, n_permutations, diff):
+def permutation_test_one_p(variability_scores, task_names, kinematics_list, marker_list, result_base_path, correlation_method, n_permutations, matrix_type):
+
     """
     Perform a permutation test comparing two sets of matrices and return a single p-value.
     
@@ -168,11 +169,13 @@ def permutation_test_one_p(variability_scores, task_names, kinematics_list, mark
 
                 # calculate the correlation between two matrices
                 rho, p_value = stats.spearmanr(permutation.upper(avg_group1), permutation.upper(avg_group2))
-                plotting.plot_avg_matrices(avg_group1, avg_group2, group1, group2, marker_list, task, direction, matrix_type, result_base_path, rho, p_value)
 
-                if diff:
-                    permutation.permute_difference_matrix(avg_group1, avg_group2, group1, group2, marker_list, task, kinematic, direction, result_base_path, matrix_type)
-                permutation.permute(avg_group1, avg_group2, marker_list, task, matrix_type, kinematic, direction, result_base_path)
+                suptitle = (f'{"Standard deviation" if matrix_type == "std" else "Average"} kinectomes in {direction} direction during '
+                            f'{"preferred walking speed" if task == "walkPreferred" else "fast walking speed" if task == "walkFast" else "slow walking speed"}')
+                fig_name = f'{matrix_type}_matrices_{direction}_{task}.png'
+                plotting.plot_avg_matrices(avg_group1, avg_group2, group1, group2, marker_list, task, direction, matrix_type, result_base_path, rho, p_value, suptitle, fig_name)
+
+                permutation.permute(avg_group1, avg_group2, marker_list, task, matrix_type, kinematic, direction, result_base_path, correlation_method, n_permutations)
 
     return results
 
@@ -410,15 +413,15 @@ def reorder_difference_matrix(matrices, marker_list, result_base_path, correlati
 #     print()
 
 
-def compare_between_groups(diagnosis_list, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list_affect, result_base_path, full, correlation_method):
+def compare_between_groups(diagnosis_list, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list_affect, result_base_path, full, correlation_method, interpol):
 
     # calculate the matrices of mean and standard deviation of the kinectomes (mean and sd matrix for each subject-task-kinematics-direction)
-    matrices = calc_std_avg_matrices(diagnosis_list, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, full, correlation_method)
+    matrices = calc_std_avg_matrices(diagnosis_list, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, full, correlation_method, interpol)
 
     # permutation testing of the average and std matrices
-    # std_p_values = permutation_test_one_p(matrices, task_names, kinematics_list, marker_list, result_base_path, matrix_type='std', n_permutations=10000)
+    std_p_values = permutation_test_one_p(matrices, task_names, kinematics_list, marker_list_affect, result_base_path, correlation_method, n_permutations=10000, matrix_type='std' )
 
-    # avg_p_values = permutation_test_one_p(matrices, task_names, kinematics_list, marker_list, result_base_path, matrix_type='avg', n_permutations=10000)
+    # avg_p_values = permutation_test_one_p(matrices, task_names, kinematics_list, marker_list_affect, result_base_path, correlation_method, n_permutations=10000, matrix_type='avg')
     
     # diff_p_values =  permutation_test_one_p(matrices, task_names, kinematics_list, marker_list, result_base_path, matrix_type='avg', n_permutations=10000, diff=False)
 
@@ -427,4 +430,5 @@ def compare_between_groups(diagnosis_list, kinematics_list, task_names, tracking
 
     print()
 
+    return matrices
 
