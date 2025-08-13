@@ -7,6 +7,7 @@ pp0*
 std_*
 *.png
 src/data_utils/plotting_for_manuscript.py
+src/preprocessing/plot_interpolated.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
