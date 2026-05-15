@@ -1,9 +1,15 @@
-
 import numpy as np
-from src.modularity import build_graph
+import pandas as pd
 from src.data_utils.data_loader import load_kinectomes
 from src.data_utils import groups
+import pickle
+from pathlib import Path
+from src.data_utils.plotting import plot_community_nodal_strength
+from src.data_utils.statistics import analyze_centrality_statistics_by_community
+from src.graph_utils.graphs import all_graphs_for_subject
 
+
+#used
 def weighted_degree_centrality(G):
     """Calculates weighted degree centrality for each node in the graph."""
     ## TODO: note that this may not be the best parameter. as weight can be negative and even it out. 
@@ -11,327 +17,222 @@ def weighted_degree_centrality(G):
     
     return {node: sum(weight for _, _, weight in G.edges(node, data='weight')) for node in G.nodes()}
 
-def all_graphs_for_subject(kinectomes, marker_list):
-    all_graphs = {"AP": [], "ML": [], "V": []}
+#used
+def export_centrality_to_csv(group_centrality_data, save_path=None):
+    """
+    Export centrality data to a single CSV file with all body segments.
+    Each column is named as: {segment}_{speed}_{direction}
+    e.g., head_pref_AP, head_pref_ML, head_pref_V, head_slow_AP, etc.
+    """
+    if save_path is None:
+        save_path = Path(r"C:\Users\Karolina\Desktop\pykinectome\results\centrality\csv")
+   
+    # Create directory if it doesn't exist
+    save_path.mkdir(parents=True, exist_ok=True)
+   
+    # Get all unique body segments (markers/nodes) across all groups, subjects, tasks, and directions
+    all_segments = set()
+    for group in group_centrality_data:
+        for sub_id in group_centrality_data[group]:
+            for task_name in group_centrality_data[group][sub_id]:
+                for direction in group_centrality_data[group][sub_id][task_name]:
+                    all_segments.update(group_centrality_data[group][sub_id][task_name][direction].keys())
+   
+    # Define the task name mappings
+    task_mapping = {
+        'walkPreferred': 'pref',
+        'walkSlow': 'slow',
+        'walkFast': 'fast'
+    }
     
-    for kinectome in kinectomes:
-        graphs = build_graph(kinectome, marker_list)
-
-        keys = list(all_graphs.keys())
-        for i, key in enumerate(keys):
-            all_graphs[key].append(graphs[i])
-     
-    return all_graphs
-
-import matplotlib.pyplot as plt
-import numpy as np
-from pathlib import Path
-
-def create_comparison_boxplot(group_average_weights, task_name, direction, kinematics):
-    # Get the groups (e.g., "Parkinson" and "Control")
-    groups = list(group_average_weights.keys())
+    # Sort segments for consistent ordering
+    all_segments = sorted(all_segments)
+   
+    rows = []
     
-    # Get all unique markers across both groups
-    all_markers = set()
-    for group in groups:
-        all_markers.update(group_average_weights[group][task_name][direction].keys())
-    all_markers = sorted(list(all_markers))
-    
-    # Create figure with adjusted height based on number of markers
-    fig, ax = plt.subplots(figsize=(10, len(all_markers)*0.4))
-    
-    # Calculate positions for the boxplots
-    positions = []
-    labels = []
-    colors = ['#E69F00', '#56B4E9']  # Orange for Parkinson, Blue for Control
-    
-    # Prepare data for plotting
-    for i, marker in enumerate(all_markers):
-        for j, group in enumerate(groups):
-            # Calculate position for this marker-group combination
-            pos = i + j/3  # Offset each group slightly
-            positions.append(pos)
-            labels.append(f"{marker}" if j == 0 else "")  # Only label once per marker
-            
-    # Create boxplot data and colors
-    boxplot_data = []
-    box_colors = []
-    
-    for i, marker in enumerate(all_markers):
-        for j, group in enumerate(groups):
-            # Get the value if it exists
-            if marker in group_average_weights[group][task_name][direction]:
-                value = group_average_weights[group][task_name][direction][marker]
-                # For boxplot, we need a list of values, even if just one
-                boxplot_data.append([value])
-                box_colors.append(colors[j])
-            else:
-                boxplot_data.append([0])  # Placeholder if no data
-                box_colors.append('white')
-    
-    # Create the boxplot
-    bplot = ax.boxplot(boxplot_data, positions=positions, vert=False, 
-                      patch_artist=True, widths=0.2, showfliers=False)
-    
-    # Color the boxes based on group
-    for patch, color in zip(bplot['boxes'], box_colors):
-        patch.set_facecolor(color)
-    
-    # Set y-axis ticks and labels
-    ax.set_yticks([i + 0.15 for i in range(len(all_markers))])
-    ax.set_yticklabels(all_markers)
-    
-    # Add a legend
-    from matplotlib.patches import Patch
-    legend_elements = [Patch(facecolor=colors[i], label=group) for i, group in enumerate(groups)]
-    ax.legend(handles=legend_elements, loc='upper right')
-    
-    # Set other plot properties
-    ax.set_xlabel("Centrality")
-    ax.set_ylabel("Markers")
-    ax.set_title(f"{kinematics} {task_name} {direction}: Centrality")
-    
-    # Set y-axis limits with some padding
-    ax.set_ylim(-0.5, len(all_markers) - 0.5)
-    
-    # Save the figure
-    save_path = Path("C:\\Users\\Karolina\\Desktop\\pykinectome\\pykinectome\\src\\preprocessing")
-    plt.savefig(save_path / f"{kinematics}_{task_name}_{direction}_centrality_comparison.png", 
-                dpi=300, bbox_inches='tight')
-    plt.close()
-
-
-# def centrality_main(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list, result_base_path):
-#     disease_sub_ids, matched_control_sub_ids = groups.define_groups(diagnosis)
-#     debug_ids = ['pp021', 'pp006']
-    
-#     # Update the data structure to include task_name
-#     group_average_weights = {f"{diagnosis[0][10:].capitalize()}": {}, "Control": {}}
-    
-#     for kinematics in kinematics_list:
-#         for sub_id in disease_sub_ids + matched_control_sub_ids:
-#         # for sub_id in debug_ids:    
-#             group = f"{diagnosis[0][10:].capitalize()}" if sub_id in disease_sub_ids else "Control"
-            
-#             for tracksys in tracking_systems:
-#                 for task_name in task_names:
-#                     for run in runs:
-#                         if sub_id in pd_on:
-#                             run = 'on'
-#                         elif sub_id not in disease_sub_ids:
-#                             run = None
-#                         else:
-#                             run = run
-                            
-#                         kinectomes = load_kinectomes(base_path, sub_id, task_name, tracksys, run, kinematics)
-#                         if kinectomes is None:
-#                             continue
-                            
-#                         graphs = all_graphs_for_subject(kinectomes, marker_list)
-#                         subject_average_weights = {}
-                        
-#                         for direction in ['AP', 'ML', 'V']:
-#                             direction_graphs = graphs[direction]
-#                             total_weights = []
-#                             for current_graph in direction_graphs:
-#                                 weights = weighted_degree_centrality(current_graph)
-#                                 total_weights.append(weights)
-#                             average_weights = {node: np.mean([weights[node] for weights in total_weights]) for node in total_weights[0]}
-#                             subject_average_weights[direction] = average_weights
-                        
-#                         # Initialize group structure if needed
-#                         if group not in group_average_weights:
-#                             group_average_weights[group] = {}
-                        
-#                         # Initialize task structure if needed
-#                         if task_name not in group_average_weights[group]:
-#                             group_average_weights[group][task_name] = {}
-                        
-#                         # Initialize direction structure if needed
-#                         for direction in ['AP', 'ML', 'V']:
-#                             if direction not in group_average_weights[group][task_name]:
-#                                 group_average_weights[group][task_name][direction] = {}
-                            
-#                             # Add subject data to the appropriate task
-#                             for node in subject_average_weights[direction]:
-#                                 if node not in group_average_weights[group][task_name][direction]:
-#                                     group_average_weights[group][task_name][direction][node] = [subject_average_weights[direction][node]]
-#                                 else:
-#                                     group_average_weights[group][task_name][direction][node].append(subject_average_weights[direction][node])
-    
-#     # Calculate averages for each group, task, direction, and node
-#     for group in group_average_weights:
-#         for task_name in group_average_weights[group]:
-#             for direction in group_average_weights[group][task_name]:
-#                 for node in group_average_weights[group][task_name][direction]:
-#                     group_average_weights[group][task_name][direction][node] = np.round(
-#                         np.mean(group_average_weights[group][task_name][direction][node]), 2)
-    
-    # print(group_average_weights)
-
-    # kinematics = "acc"
-    # task_name = "walkPreferred"
-    # direction = "AP"
-
-    # create_comparison_boxplot(group_average_weights, task_name, direction, kinematics)
-    # return group_average_weights
-
-def create_comparison_boxplot(group_centrality_data, task_name, direction, kinematics, node_order=None):
-    # Get the groups (e.g., "Parkinson" and "Control")
-    groups = list(group_centrality_data.keys())
-    
-    # Get all unique markers across both groups
-    all_markers = set()
-    for group in groups:
-        if task_name in group_centrality_data[group] and direction in group_centrality_data[group][task_name]:
-            all_markers.update(group_centrality_data[group][task_name][direction].keys())
-    
-    # If a custom order is provided, use it
-    if node_order:
-        # Filter the order list to only include markers that exist in the data
-        all_markers = [marker for marker in node_order if marker in all_markers]
-    else:
-        # Otherwise, use alphabetical order
-        all_markers = sorted(list(all_markers))
-    
-    # Create figure with adjusted height based on number of markers
-    fig, ax = plt.subplots(figsize=(10, len(all_markers)*0.4))
-    
-    # Positions for each marker
-    positions = np.arange(len(all_markers))
-    
-    # Colors for each group
-    colors = ['#E69F00', '#56B4E9']  # Orange for Parkinson, Blue for Control
-    
-    # Width of each box
-    width = 0.4
-    
-    # Plot each group
-    for i, group in enumerate(groups):
-        group_positions = positions + width * (i - 0.5)
-        group_data = []
-        
-        for marker in all_markers:
-            if (task_name in group_centrality_data[group] and 
-                direction in group_centrality_data[group][task_name] and 
-                marker in group_centrality_data[group][task_name][direction]):
-                group_data.append(group_centrality_data[group][task_name][direction][marker])
-            else:
-                group_data.append([])
-        
-        # Create the boxplot for this group
-        bplot = ax.boxplot(group_data, positions=group_positions, 
-                          patch_artist=True, widths=width*0.8, 
-                          showfliers=False, vert=False)
-        
-        # Set colors for this group
-        for patch in bplot['boxes']:
-            patch.set_facecolor(colors[i])
-            patch.set_alpha(0.7)
-        
-        for median in bplot['medians']:
-            median.set_color('black')
-            median.set_linewidth(1.5)
-    
-    # Set y-axis ticks and labels
-    ax.set_yticks(positions)
-    ax.set_yticklabels(all_markers)
-    
-    # Add a legend
-    from matplotlib.patches import Patch
-    legend_elements = [Patch(facecolor=colors[i], alpha=0.7, label=group) for i, group in enumerate(groups)]
-    ax.legend(handles=legend_elements, loc='upper right')
-    
-    # Set other plot properties
-    ax.set_xlabel("Centrality")
-    ax.set_ylabel("Markers")
-    ax.set_title(f"{kinematics} {task_name} {direction}: Centrality")
-    
-    # Set y-axis limits with some padding
-    ax.set_ylim(-0.5, len(all_markers) - 0.5)
-    
-    # Save the figure
-    save_path = Path("C:\\Users\\Karolina\\Desktop\\pykinectome\\pykinectome\\src\\preprocessing")
-    plt.savefig(save_path / f"{kinematics}_{task_name}_{direction}_centrality_comparison.png", 
-                dpi=300, bbox_inches='tight')
-    plt.close()
-    
-    return fig
-
-def centrality_main(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list, result_base_path, full, correlation_method):
-    disease_sub_ids, matched_control_sub_ids = groups.define_groups(diagnosis)
-    debug_ids = ['pp021', 'pp006']
-    
-    # Change this to store all subject values instead of just averages
-    group_centrality_data = {f"{diagnosis[0][10:].capitalize()}": {}, "Control": {}}
-    
-    for kinematics in kinematics_list:
-        for sub_id in disease_sub_ids + matched_control_sub_ids:
-            group = f"{diagnosis[0][10:].capitalize()}" if sub_id in disease_sub_ids else "Control"
-            
-            for tracksys in tracking_systems:
-                for task_name in task_names:
-                    for run in runs:
-                        if sub_id in pd_on:
-                            run = 'on'
-                        elif sub_id not in disease_sub_ids:
-                            run = None
+    # Iterate through each group and subject
+    for group in group_centrality_data:
+        for sub_id in group_centrality_data[group]:
+            row = {'group': group, 'subject_id': sub_id}
+           
+            # For each segment, task, and direction combination
+            for segment in all_segments:
+                for task_name, task_prefix in task_mapping.items():
+                    for direction in ['AP', 'ML', 'V']:
+                        col_name = f"{segment}_{task_prefix}_{direction}"
+                       
+                        # Get the value if it exists, otherwise NaN
+                        if (task_name in group_centrality_data[group][sub_id] and
+                            direction in group_centrality_data[group][sub_id][task_name] and
+                            segment in group_centrality_data[group][sub_id][task_name][direction]):
+                           
+                            value = group_centrality_data[group][sub_id][task_name][direction][segment]
+                            row[col_name] = value
                         else:
-                            run = run
-                            
-                        kinectomes = load_kinectomes(base_path, sub_id, task_name, tracksys, run, kinematics, full, correlation_method)
-                        if kinectomes is None:
-                            continue
-                            
-                        graphs = all_graphs_for_subject(kinectomes, marker_list)
-                        subject_average_weights = {}
+                            row[col_name] = np.nan
+           
+            rows.append(row)
+   
+    # Create DataFrame
+    df = pd.DataFrame(rows)
+   
+    # Order columns: group, subject_id, then all segment_task_direction combinations
+    column_order = ['group', 'subject_id']
+    for segment in all_segments:
+        for task_prefix in ['pref', 'slow', 'fast']:
+            for direction in ['AP', 'ML', 'V']:
+                column_order.append(f"{segment}_{task_prefix}_{direction}")
+   
+    df = df[column_order]
+   
+    # Save to CSV
+    csv_filename = "all_segments_centrality.csv"
+    df.to_csv(save_path / csv_filename, index=False)
+    print(f"Saved {csv_filename}")
+   
+    print(f"CSV file saved to: {save_path}")
+    return save_path, df
+
+#used
+def community_weighted_degree_centrality(G, consensus_communities):
+    """
+    Calculates weighted degree centrality for each node considering only edges within their community.
+    
+    Parameters:
+    G: NetworkX graph
+    consensus_communities: List of sets, where each set contains nodes belonging to the same community
+    
+    Returns:
+    Dictionary with node centrality values based on intra-community connections only
+    """
+    # Create a mapping from node to its community
+    node_to_community = {}
+    for i, community in enumerate(consensus_communities):
+        for node in community:
+            node_to_community[node] = i
+    
+    centrality = {}
+    
+    for node in G.nodes():
+        if node not in node_to_community:
+            # If node is not in any community, its centrality is 0
+            centrality[node] = 0
+            continue
+            
+        node_community = node_to_community[node]
+        community_weight_sum = 0
+        
+        # Sum weights only for edges to nodes in the same community
+        for _, neighbor, weight in G.edges(node, data='weight'):
+            if neighbor in node_to_community and node_to_community[neighbor] == node_community:
+                community_weight_sum += weight
+                
+        centrality[node] = community_weight_sum
+    
+    return centrality
+
+
+def centrality_main(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list, result_base_path, full, 
+                    correlation_method, interpol, consensus_communities, community_centrality = False):
+    
+    # Modify pickle path to distinguish between regular and community centrality
+    centrality_type = 'community' if community_centrality else 'regular'
+    centrality_pickle_path = Path(result_base_path, 'centrality', f'centrality_data_{correlation_method}_{centrality_type}.pkl')
+
+
+    if not centrality_pickle_path.exists():
+
+        #TO DO: put the below in a separate function
+        disease_sub_ids, matched_control_sub_ids = groups.define_groups(diagnosis)
+        debug_ids = ['pp021', 'pp006']
+        
+        # Initialize the data structure with subject IDs
+        group_centrality_data = {f"{diagnosis[0][10:].capitalize()}": {}, "Control": {}}
+        
+        # Initialize all subjects in both groups
+        for sub_id in disease_sub_ids:
+            group_centrality_data[f"{diagnosis[0][10:].capitalize()}"][sub_id] = {}
+        
+        for sub_id in matched_control_sub_ids:
+            group_centrality_data["Control"][sub_id] = {}
+        
+        for kinematics in kinematics_list:
+            for sub_id in disease_sub_ids + matched_control_sub_ids:
+                group = f"{diagnosis[0][10:].capitalize()}" if sub_id in disease_sub_ids else "Control"
+                
+                for tracksys in tracking_systems:
+                    for task_name in task_names:
+                        # Initialize task structure for this subject
+                        if task_name not in group_centrality_data[group][sub_id]:
+                            group_centrality_data[group][sub_id][task_name] = {}
                         
-                        for direction in ['AP', 'ML', 'V']:
-                            direction_graphs = graphs[direction]
-                            total_weights = []
-                            for current_graph in direction_graphs:
-                                weights = weighted_degree_centrality(current_graph)
-                                total_weights.append(weights)
-                            average_weights = {node: np.mean([weights[node] for weights in total_weights]) for node in total_weights[0]}
-                            subject_average_weights[direction] = average_weights
-                        
-                        # Initialize group structure if needed
-                        if group not in group_centrality_data:
-                            group_centrality_data[group] = {}
-                        
-                        # Initialize task structure if needed
-                        if task_name not in group_centrality_data[group]:
-                            group_centrality_data[group][task_name] = {}
-                        
-                        # Initialize direction structure if needed
-                        for direction in ['AP', 'ML', 'V']:
-                            if direction not in group_centrality_data[group][task_name]:
-                                group_centrality_data[group][task_name][direction] = {}
-                            
-                            # Add subject data for each node
-                            for node in subject_average_weights[direction]:
-                                if node not in group_centrality_data[group][task_name][direction]:
-                                    group_centrality_data[group][task_name][direction][node] = []
+                        for run in runs:
+                            if sub_id in pd_on:
+                                run = 'on'
+                            elif sub_id not in disease_sub_ids:
+                                run = None
+                            else:
+                                run = run
                                 
-                                # Store individual subject data point instead of averaging
-                                group_centrality_data[group][task_name][direction][node].append(
-                                    subject_average_weights[direction][node])
+                            kinectomes = load_kinectomes(base_path, sub_id, task_name, tracksys, run, kinematics, full, correlation_method, interpol)
+                            
+                            if kinectomes is None:
+                                # Store NaN values for missing data
+                                for direction in ['AP', 'ML', 'V']:
+                                    if direction not in group_centrality_data[group][sub_id][task_name]:
+                                        group_centrality_data[group][sub_id][task_name][direction] = {}
+                                    
+                                    # You'll need to know what nodes should be here - this assumes marker_list contains the node names
+                                    for node in marker_list:
+                                        if node not in group_centrality_data[group][sub_id][task_name][direction]:
+                                            group_centrality_data[group][sub_id][task_name][direction][node] = np.nan
+                                continue
+                                
+                            graphs = all_graphs_for_subject(kinectomes, marker_list, bound_value = None) # add bound_value if of interest
+                            subject_average_weights = {}
+                            
+                            for direction in ['AP', 'ML', 'V']:
+                                direction_graphs = graphs[direction]
+                                total_weights = []
+                                for current_graph in direction_graphs:
+                                    # Choose centrality calculation method based on community_centrality flag
+                                    if community_centrality:
+                                        weights = community_weighted_degree_centrality(current_graph, consensus_communities)
+                                    else:
+                                        weights = weighted_degree_centrality(current_graph)
+                                    total_weights.append(weights)
+                                average_weights = {node: np.mean([weights[node] for weights in total_weights]) for node in total_weights[0]}
+                                subject_average_weights[direction] = average_weights
+                            
+                            # Initialize direction structure for this subject and task
+                            for direction in ['AP', 'ML', 'V']:
+                                if direction not in group_centrality_data[group][sub_id][task_name]:
+                                    group_centrality_data[group][sub_id][task_name][direction] = {}
+                                
+                                # Store individual subject data for each node
+                                for node in subject_average_weights[direction]:
+                                    group_centrality_data[group][sub_id][task_name][direction][node] = subject_average_weights[direction][node]
+
+        with open (centrality_pickle_path, 'wb') as centrality_file:
+            pickle.dump(group_centrality_data, centrality_file)
+
+    else:
+        with open (centrality_pickle_path, 'rb') as centrality_file:
+            group_centrality_data = pickle.load(centrality_file)
     
+    csv_save_path, centrality_df = export_centrality_to_csv(group_centrality_data)
     
-    custom_node_order = reversed(['head', 'ster', 'l_sho', 'r_sho', 'l_asis', 'l_psis', 'r_asis', 'r_psis', # core nodes
-                        'l_elbl','l_wrist','l_hand', # left arm
-                        'l_th', 'l_sk','l_ank','l_toe', # left leg
-                        'r_elbl','r_wrist','r_hand', # right arm
-                        'r_th', 'r_sk', 'r_ank', 'r_toe' # right leg
-                        ])
-    
-    # Create comparison boxplot
-    kinematics = "acc"
-    task_name = "walkPreferred"
-    direction = "AP"
-    fig = create_comparison_boxplot(group_centrality_data, task_name, direction, kinematics, node_order=custom_node_order)
-    
-    return group_centrality_data
+    # Run analysis
+    results = analyze_centrality_statistics_by_community(
+        centrality_df, consensus_communities, alpha=0.05, 
+        correction_methods=['fdr_bh'], n_bootstrap=1000, use_bootstrap=False
+    )
+
+    # TO DO: save dir as global variable
+    # Create plots
+    plot_community_nodal_strength(centrality_df, consensus_communities, results, save_dir="C:/Users/Karolina/Desktop/pykinectome/results/community_plots")
+
+    return 
 
 
 
