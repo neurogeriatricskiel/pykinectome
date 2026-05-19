@@ -11,7 +11,8 @@ import os
 from src.data_utils.permutation import expand_marker_list
 from matplotlib.patches import Rectangle
 from tqdm import tqdm
-
+import matplotlib.gridspec as gridspec
+from src import kinectome_characteristics
 
 
 def plot_avg_matrices(avg_group1, avg_group2, group1, group2, marker_list, task, direction, matrix_type, result_base_path, rho, p_value, suptitle, figname):
@@ -85,8 +86,6 @@ def plot_avg_matrices(avg_group1, avg_group2, group1, group2, marker_list, task,
     save_path = result_folder / figname
     plt.savefig(save_path, dpi=600, bbox_inches='tight')
     plt.close()  # Close the figure to free memory
-
-
 
 def visualise_allegiance_matrix_with_communities(allegiance_matrix, communities, marker_list, group, task_name, kinematic, direction, result_base_path, correlation_method, full):
     """
@@ -181,8 +180,8 @@ def visualise_allegiance_matrix_with_communities(allegiance_matrix, communities,
               f"Communities: {len(communities)} detected", fontsize=16, y=1.05)
     
     # Rotate x-axis labels for better readability
-    plt.xticks(rotation=45, ha='right')
-    plt.yticks(rotation=0)
+    plt.xticks(fontsize = 17, rotation=45, ha='right')
+    plt.yticks(fontsize = 17, rotation=0)
     
     # Define result path
     result_folder = Path(result_base_path) / "allegiance_matrices_with_communities"
@@ -252,7 +251,6 @@ def visualise_allegiance_matrix(allegiance_matrix, marker_list, group, task_name
     plt.tight_layout()
     plt.savefig(save_path, dpi=600)
  
-
 def plot_correlation_heatmap(corr_matrix, marker_list, title='Maximum Cross-Correlation', result_base_path = 'C:/Users/Karolina/Desktop/pykinectome/results'):
     """Plot a heatmap of the correlation matrix"""
     plt.figure(figsize=(12, 10))
@@ -307,7 +305,6 @@ def draw_graph_with_weights(G, result_base_path = 'C:/Users/Karolina/Desktop/pyk
 
     plt.savefig(save_path, dpi=300, bbox_inches='tight')  
 
-
 def draw_graph_with_selected_weights(G, selected_edges=None, result_base_path = 'C:/Users/Karolina/Desktop/pykinectome/results'):
     """
     Visualizes the graph with edge weights for specified edges only.
@@ -350,9 +347,6 @@ def draw_graph_with_selected_weights(G, selected_edges=None, result_base_path = 
 
     plt.savefig(save_path, dpi=600)
 
-import seaborn as sns
-from pathlib import Path
-import matplotlib.gridspec as gridspec
 def visualise_kinectome(kinectome_data, figname, marker_list, sub_id, task_name, kinematics, result_base_path, what_to_plot):
     """
     Plots the average (or std) kinectomes in AP, ML, and V directions with marker names as labels.
@@ -411,7 +405,6 @@ def visualise_kinectome(kinectome_data, figname, marker_list, sub_id, task_name,
     plt.savefig(save_path, dpi=600, bbox_inches='tight')
     plt.close()  # Close the figure to free memory
 
-
 def plot_difference_matrix(diff_mtrx_sorted, reordered_markers, task, kin, direction, group1_name, group2_name, result_base_path, figname):
     """ plots the difference matrix sorted according to the highest differences"""
     plt.figure(figsize=(10, 8))
@@ -436,8 +429,6 @@ def plot_difference_matrix(diff_mtrx_sorted, reordered_markers, task, kin, direc
 
     save_path = result_folder / f'{figname}'
     plt.savefig(save_path, dpi=600)
-
-
 
 def plot_cc(DATA_PATH,sub_id,task_name,tracksys,run,kinematics,MARKER_LIST,threshold_list=[0.2,0.4,0.6,0.8]):
     from src.data_utils import data_loader
@@ -475,8 +466,6 @@ def plot_cc(DATA_PATH,sub_id,task_name,tracksys,run,kinematics,MARKER_LIST,thres
     fig.suptitle(f"{kinematics} {task_name} {sub_id} ") 
 
     fig.savefig(f"{save_path}/{sub_id}_{kinematics}_{task_name}-cc.png")
-
-
 
 def event_plot_cc(DATA_PATH,sub_id,task_name,tracksys,run,kinematics,MARKER_LIST,threshold_list,direction, full, correlation_method):
     from src.data_utils import data_loader
@@ -542,7 +531,6 @@ def event_plot_cc(DATA_PATH,sub_id,task_name,tracksys,run,kinematics,MARKER_LIST
 
         fig.savefig(f"{save_path}/{sub_id}_run-{run}_{kinematics}_{idx}_{task_name}-curve_event.png")
 
-
 def event_plot_components(DATA_PATH,sub_id,task_name,tracksys,run,kinematics,MARKER_LIST,threshold_list=[0.2,0.4,0.6,0.8],direction=1):
     from src.data_utils import data_loader
     from src.graph_utils.kinectome2graph import build_graph, clustering_coef, cc_connected_components
@@ -604,7 +592,6 @@ def event_plot_components(DATA_PATH,sub_id,task_name,tracksys,run,kinematics,MAR
             os.makedirs(save_path)
 
         fig.savefig(f"{save_path}/{sub_id}_run{run}_{kinematics}_{idx}_{task_name}-connected-components.png")
-
 
 def plot_region_difference_matrix(region_diff_matrix, region_names, task, kin, direction, 
                                  group1, group2, result_base_path, figname):
@@ -676,7 +663,6 @@ def plot_region_difference_matrix(region_diff_matrix, region_names, task, kin, d
     plt.savefig(os.path.join(result_base_path, figname), dpi=300, bbox_inches='tight')
     plt.close()
 
-
 def plot_difference_distributions(avg_matrices, tasks, kinematics, directions):
     """
     Creates histograms showing the distribution of correlation differences
@@ -742,92 +728,575 @@ def plot_difference_distributions(avg_matrices, tasks, kinematics, directions):
     plt.tight_layout()
     return fig
 
-
-# from PIL import Image
-# import os
-# from pathlib import Path
-
-# def stack_images_vertically(image_paths, output_path, spacing=0):
-#     """
-#     Stack PNG images vertically while preserving DPI
+#used in centrality analysis
+def plot_community_nodal_strength(df, consensus_communities, results, save_dir="./plots"):
+    """
+    Create plots showing nodal strength by community, with separate subplots for each segment
+    within the community, showing all speeds and groups, including statistical significance.
     
-#     Args:
-#         image_paths: List of paths to PNG files (strings or Path objects)
-#         output_path: Path for the output stacked image (string or Path object)
-#         spacing: Optional spacing between images in pixels (default: 0)
+    Parameters:
+    -----------
+    df : pandas.DataFrame
+        DataFrame with centrality data
+    consensus_communities : list of sets
+        List of sets containing body segments for each community
+    results : dict
+        Dictionary containing statistical test results
+    save_dir : str
+        Directory to save plots
+    """
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import numpy as np
+    import pandas as pd
+    import os
     
-#     Returns:
-#         str: Path to the saved stacked image
+    def get_significance_symbol(p_value):
+        """Convert p-value to significance symbol"""
+        if p_value < 0.001:
+            return '***'
+        elif p_value < 0.01:
+            return '**'
+        elif p_value < 0.05:
+            return '*'
+        else:
+            return ''
+    
+    def add_significance_line(ax, x1, x2, y, symbol, offset=0.5):
+        """Add significance line and symbol between two positions"""
+        line_height = y + offset
+        ax.plot([x1, x2], [line_height, line_height], 'k-', linewidth=1)
+        ax.plot([x1, x1], [y, line_height], 'k-', linewidth=1)
+        ax.plot([x2, x2], [y, line_height], 'k-', linewidth=1)
+        ax.text((x1 + x2) / 2, line_height + 0.3, symbol, ha='center', va='bottom', fontsize=17, fontweight='bold')
+        return line_height + 2.5  # Return next available height
+    
+    # Create save directory if it doesn't exist
+    os.makedirs(save_dir, exist_ok=True)
+    
+    speeds = ['pref', 'fast', 'slow']
+    directions = ['AP', 'ML', 'V']
+    groups = df['group'].unique()
 
-
-#         # how to run the stack figure code:
-#         from pathlib import Path
-
-#         # Your directory
-#         figures_dir = Path(r"C:\Users\Karolina\Desktop\pykinectome\writing\figures\patetrn_subfigures")
-
-#         # Get specific files in custom order if needed
-#          png_files = [
-#             figures_dir / "specific_figure1.png",
-#              figures_dir / "specific_figure2.png",
-#             # ... add more in your desired order
-#         ]
-
-#         # Or get all PNG files sorted
-#         png_files = sorted(figures_dir.glob("*.png"))
-
-#         # Stack them
-#         output_path = figures_dir / "my_stacked_figures.png"
-#         stack_images_vertically(png_files, output_path, spacing=20)
+    consensus_communities = [
+        ['head', 'sternum', 'shoulder_las', 'shoulder_mas', 'asis_las', 'asis_mas', 'psis_las', 'psis_mas'],
+        ['elbow_las', 'wrist_las', 'hand_las', 'thigh_mas', 'shank_mas', 'ankle_mas', 'toe_mas'],
+        ['elbow_mas', 'wrist_mas', 'hand_mas', 'thigh_las', 'shank_las', 'ankle_las', 'toe_las']
+    ] # make the consensus communities into a list so the order for subplots remains as indicated
+    
+    # Set up colors - different colors for each speed within each group
+    # PD: red/yellow tones, Controls: blue/green tones
+    speed_colors = {
+        'Parkinson': {'pref': '#FF6B6B', 'slow': '#FFE66D', 'fast': '#FF8E53'},  # red/yellow tones
+        'Control': {'pref': '#4ECDC4', 'slow': '#45B7D1', 'fast': '#96CEB4'}     # blue/green tones
+    }
+    
+    # Fixed y-axis limits for all plots
+    fixed_y_min = 0
+    fixed_y_max = 35
+    y_range = fixed_y_max - fixed_y_min
+    
+    for community_idx, community in enumerate(consensus_communities):
+        community_segments = community 
         
-#     """
-#     if not image_paths:
-#         raise ValueError("No image paths provided")
-    
-#     # Convert paths to strings if they're Path objects
-#     image_paths = [str(p) for p in image_paths]
-#     output_path = str(output_path)
-    
-#     # Verify all files exist
-#     missing_files = [p for p in image_paths if not os.path.exists(p)]
-#     if missing_files:
-#         raise FileNotFoundError(f"Missing files: {missing_files}")
-    
-#     # Open all images
-#     images = []
-#     for path in image_paths:
-#         img = Image.open(path)
-#         images.append(img)
-    
-#     # Get the maximum width and calculate total height
-#     max_width = max(img.width for img in images)
-#     total_height = sum(img.height for img in images) + spacing * (len(images) - 1)
-    
-#     # Get DPI from first image (assuming all have same DPI)
-#     dpi = images[0].info.get('dpi', (600, 600))
-    
-#     # Create new image with transparent background
-#     # Use RGBA mode to support transparency
-#     stacked = Image.new('RGBA', (max_width, total_height), (255, 255, 255, 0))
-    
-#     # Paste images vertically
-#     y_offset = 0
-#     for img in images:
-#         # Center the image horizontally if it's narrower than max_width
-#         x_offset = (max_width - img.width) // 2
-        
-#         # Convert to RGBA if not already
-#         if img.mode != 'RGBA':
-#             img = img.convert('RGBA')
-        
-#         stacked.paste(img, (x_offset, y_offset), img)
-#         y_offset += img.height + spacing
-    
-#     # Save with preserved DPI
-#     stacked.save(output_path, dpi=dpi, optimize=True)
-#     print(f"Stacked image saved to {output_path}")
-#     print(f"Final dimensions: {stacked.width}x{stacked.height} at {dpi[0]} DPI")
-    
-#     return output_path
+        for direction in directions:
+            # Create figure with subplots for each segment in the community
+            n_segments = len(community_segments)
+            n_cols = min(3, n_segments)  # Max 3 columns
+            n_rows = (n_segments + n_cols - 1) // n_cols  # Calculate needed rows
+            
+            fig, axes = plt.subplots(n_rows, n_cols, figsize=(6*n_cols, 5*n_rows))
+            if n_segments == 1:
+                axes = [axes]
+            elif n_rows == 1:
+                axes = axes
+            else:
+                axes = axes.flatten()
+            
+            # fig.suptitle(f'Community {community_idx + 1} - {direction} Direction Nodal Strength', 
+            #             fontsize=16, fontweight='bold')
+            
+            for seg_idx, segment in enumerate(community_segments):
+                ax = axes[seg_idx] if n_segments > 1 else axes[0]
+                
+                # Only show y-label on leftmost subplot of each row
+                row = seg_idx // n_cols
+                col = seg_idx % n_cols
+                if col == 0:
+                    ax.set_ylabel('Nodal Strength')
+                else:
+                    ax.set_ylabel('')
+                
+                # Prepare data for this segment
+                plot_data = []
+                
+                for group in groups:
+                    group_df = df[df['group'] == group]
+                    
+                    for speed in speeds:
+                        col_name = f"{segment}_{speed}_{direction}"
+                        
+                        if col_name in df.columns:
+                            values = group_df[col_name].dropna()
+                            
+                            for value in values:
+                                plot_data.append({
+                                    'Group': group,
+                                    'Speed': speed,
+                                    'Value': value,
+                                    'Group_Speed': f"{group}_{speed}"
+                                })
+                
+                if plot_data:
+                    plot_df = pd.DataFrame(plot_data)
+                    
+                    # Create box plot
+                    box_positions = []
+                    box_data = []
+                    box_colors = []
+                    labels = []
+                    
+                    # Create positions with spacing between groups
+                    pos = 0
+                    group_start_positions = {}
+                    
+                    for group in groups:
+                        group_start_positions[group] = pos
+                        for speed in speeds:
+                            group_speed_data = plot_df[
+                                (plot_df['Group'] == group) & 
+                                (plot_df['Speed'] == speed)
+                            ]['Value']
+                            
+                            if len(group_speed_data) > 0:
+                                box_data.append(group_speed_data)
+                                box_positions.append(pos)
+                                box_colors.append(speed_colors.get(group, {}).get(speed, 'gray'))
+                                labels.append("")  # Empty labels for x-axis
+                            pos += 1.2
+                        
+                        # Add space between groups
+                        pos += 0.3  # Increased spacing between groups
+                    
+                    if box_data:
+                        # Create the box plot
+                        bp = ax.boxplot(box_data, positions=box_positions, patch_artist=True,
+                                       labels=labels, widths=0.9)        
 
+                        # Color the boxes and add speed labels
+                        for i, (patch, color) in enumerate(zip(bp['boxes'], box_colors)):
+                            patch.set_facecolor(color)
+                            patch.set_alpha(0.8)
+                            # Add speed label in the center of the box (vertically)
+                            speed_for_this_box = speeds[i % len(speeds)]
+                            # Get the box's vertical center by averaging the 25th and 75th percentiles
+                            box_path = patch.get_path()
+                            box_vertices = box_path.vertices
+                            box_center_y = (max(box_vertices[:, 1]) + min(box_vertices[:, 1])) / 2
+                            ax.text(box_positions[i], box_center_y, 
+                                speed_for_this_box, ha='center', va='center',
+                                fontweight='bold', fontsize=15, color='black')
+                            
+                        # Get y positions for significance bars
+                        # Start from a fixed position relative to the max visible data
+                        max_data_y = max([max(data) for data in box_data])
+                        current_sig_height = max(max_data_y + 2, fixed_y_max * 0.7)  # Start at 70% of y_max or above data
+                        
+                        # Add between-group significance (above boxes)
+                        if (community_idx in results.get('between_groups_by_community', {}) and
+                            segment in results['between_groups_by_community'][community_idx]):
+                            
+                            segment_results = results['between_groups_by_community'][community_idx][segment]
+                            
+                            for speed in speeds:
+                                if (speed in segment_results and 
+                                    direction in segment_results[speed] and
+                                    segment_results[speed][direction].get('significant_fdr_bh', False)):
+                                    
+                                    p_val = segment_results[speed][direction]['p_corrected_fdr_bh']
+                                    symbol = get_significance_symbol(p_val)
+                                    
+                                    if symbol:
+                                        # Find positions for this speed in both groups
+                                        speed_positions = []
+                                        speed_idx = speeds.index(speed)
+                                        
+                                        for group_idx, group in enumerate(groups):
+                                            # Calculate position: group start + speed index
+                                            pos_in_boxes = group_idx * len(speeds) + speed_idx
+                                            if pos_in_boxes < len(box_positions):
+                                                speed_positions.append(box_positions[pos_in_boxes])
+                                        
+                                        if len(speed_positions) >= 2:
+                                            # Get the max value for this speed across groups for positioning
+                                            speed_data_max = max([max(box_data[group_idx * len(speeds) + speed_idx]) 
+                                                                for group_idx in range(len(groups)) 
+                                                                if group_idx * len(speeds) + speed_idx < len(box_data)])
+                                            sig_y_start = speed_data_max + 1.5
+                                            current_sig_height = add_significance_line(
+                                                ax, speed_positions[0], speed_positions[1], 
+                                                sig_y_start, symbol, offset=2
+                                            )
+                        
+                        # Add within-group significance (below boxes)
+                        if (community_idx in results.get('within_groups_by_community', {})):
+                            within_community = results['within_groups_by_community'][community_idx]
+                            
+                            for group_idx, group in enumerate(groups):
+                                if (group in within_community and
+                                    segment in within_community[group] and
+                                    direction in within_community[group][segment]):
+                                    
+                                    within_result = within_community[group][segment][direction]
+                                    
+                                    # Check if there's an overall significant effect
+                                    if within_result.get('significant_fdr_bh', False):
+                                        # Get positions for this group's speeds
+                                        group_positions_for_sig = []
+                                        speed_to_position = {}
+                                        
+                                        for speed_idx, speed in enumerate(speeds):
+                                            box_idx = group_idx * len(speeds) + speed_idx
+                                            if box_idx < len(box_positions):
+                                                pos = box_positions[box_idx]
+                                                group_positions_for_sig.append(pos)
+                                                speed_to_position[speed] = pos
+                                        
+                                        # Get minimum data value for this group
+                                        group_box_indices = [group_idx * len(speeds) + i for i in range(len(speeds)) 
+                                                           if group_idx * len(speeds) + i < len(box_data)]
+                                        if group_box_indices:
+                                            min_group_data = min([min(box_data[i]) for i in group_box_indices])
+                                            # Start below the minimum data
+                                            current_within_height = min_group_data - 1.5
+                                        else:
+                                            current_within_height = fixed_y_min + 2
+                                        
+                                        # Check if pairwise results are available
+                                        if 'posthoc_results' in within_result:
+                                            # Draw individual pairwise comparison lines
+                                            for posthoc in within_result['posthoc_results']:
+                                                if posthoc.get('significant', False):
+                                                    pair_p_val = posthoc['p_corrected']
+                                                    pair_symbol = get_significance_symbol(pair_p_val)
+                                                    
+                                                    if pair_symbol:
+                                                        speed1 = posthoc['level1']
+                                                        speed2 = posthoc['level2']
+                                                        
+                                                        if speed1 in speed_to_position and speed2 in speed_to_position:
+                                                            pos1 = speed_to_position[speed1]
+                                                            pos2 = speed_to_position[speed2]
+                                                            
+                                                            # Get the data values for positioning
+                                                            box_idx1 = group_idx * len(speeds) + speeds.index(speed1)
+                                                            box_idx2 = group_idx * len(speeds) + speeds.index(speed2)
+                                                            data_min = min(min(box_data[box_idx1]), min(box_data[box_idx2]))
+                                                            
+                                                            # Draw bracket going upward
+                                                            line_y = current_within_height
+                                                            ax.plot([pos1, pos2], [line_y, line_y], 'k-', linewidth=1)
+                                                            ax.plot([pos1, pos1], [line_y, line_y + 0.5], 'k-', linewidth=1)
+                                                            ax.plot([pos2, pos2], [line_y, line_y + 0.5], 'k-', linewidth=1)
+                                                            ax.text((pos1 + pos2) / 2, line_y - 0.6, 
+                                                                   pair_symbol, ha='center', va='top', fontsize=15, fontweight='bold')
+                                                            
+                                                            current_within_height = line_y - 2.5  # Stack multiple comparisons with more space
+                                        
+                                        else:
+                                            # Fallback: if no pairwise results, draw overall significance line
+                                            if len(group_positions_for_sig) >= 2:
+                                                p_val = within_result['p_corrected_fdr_bh']
+                                                symbol = get_significance_symbol(p_val)
+                                                
+                                                line_start = min(group_positions_for_sig)
+                                                line_end = max(group_positions_for_sig)
+                                                
+                                                ax.plot([line_start, line_end], 
+                                                       [current_within_height, current_within_height], 
+                                                       'k-', linewidth=1)
+                                                ax.plot([line_start, line_start], 
+                                                       [current_within_height, current_within_height + 0.5], 
+                                                       'k-', linewidth=1)
+                                                ax.plot([line_end, line_end], 
+                                                       [current_within_height, current_within_height + 0.5], 
+                                                       'k-', linewidth=1)
+                                                ax.text((line_start + line_end) / 2, current_within_height - 0.5, 
+                                                       symbol, ha='center', va='top', fontsize=15, fontweight='bold')
+                        
+                        # Set fixed y-axis limits for all subplots
+                        ax.set_ylim(fixed_y_min, fixed_y_max)
+                        
+                        # Calculate center position for each group based on actual box positions
+                        group1_positions = [box_positions[i] for i in range(len(speeds))]
+                        group2_positions = [box_positions[i] for i in range(len(speeds), len(speeds)*2)]
 
+                        if group1_positions:
+                            group1_center = np.mean(group1_positions)
+                            ax.text(group1_center, -1.5, 'Parkinson', ha='center', va='top', 
+                                    transform=ax.transData, fontweight='bold', fontsize=12)
+                        if group2_positions:
+                            group2_center = np.mean(group2_positions)
+                            ax.text(group2_center, -1.5, 'Control', ha='center', va='top', 
+                                    transform=ax.transData, fontweight='bold', fontsize=12)
+                                       
+                ax.set_title(f'{segment}', fontsize = 15, fontweight='bold')
+                ax.grid(True, alpha=0.2, axis='y')  # Only horizontal grid lines
+                ax.tick_params(axis='x', which='both', length=4, width=1, direction='out')
+                ax.set_xticks(box_positions, labels=[])  # Show ticks at box positions but no labels
+            
+            # Hide empty subplots
+            for seg_idx in range(len(community_segments), len(axes)):
+                axes[seg_idx].set_visible(False)
+            
+            plt.tight_layout()
+            
+            # Save the plot
+            filename = f"community_{community_idx + 1}_{direction}_nodal_strength.png"
+            filepath = os.path.join(save_dir, filename)
+            plt.savefig(filepath, dpi=300, bbox_inches='tight')
+            plt.show()
+            
+            print(f"Saved plot: {filepath}")
+
+def plot_permutation_histogram(rhos, true_rho, perm_p, results_path, task, kinematic, direction, matrix_type, correlation_method):
+    f,ax = plt.subplots()
+    plt.hist(rhos,bins=20)
+    ax.axvline(true_rho,  color = 'r', linestyle='--')
+    ax.set(title=f"Permuted matrix difference p: {perm_p:.3f}", ylabel="counts", xlabel="rho")
+
+    if matrix_type == 'allegiance' or matrix_type == 'allegiance_std':
+        os.chdir(Path(results_path, "allegiance_matrices"))
+    else:
+        os.chdir(Path(results_path, "avg_std_matrices"))
+
+    plt.savefig(f'permutation_{task}_{kinematic}_{direction}_{matrix_type}_{correlation_method}.png', dpi=600)
+
+def create_bootstrap_plots(bootstrap_results, observed_rhos, task_names, kinematics_list, matrix_type):
+    """
+    Create 3x3 subplot showing bootstrap distributions with observed values marked.
+    """
+    
+    # Create output directory
+    output_dir = r"C:\Users\Karolina\Desktop\pykinectome\results\avg_std_matrices\bootstrapping"
+    os.makedirs(output_dir, exist_ok=True)
+    
+    directions = ['AP', 'ML', 'V']
+    
+    for kinematic in kinematics_list:
+        fig, axes = plt.subplots(3, 3, figsize=(15, 13))
+        # fig.suptitle(f'Bootstrap Distribution of Correlations - {kinematic} ({matrix_type})', fontsize=16)
+        fig.suptitle(f'Bootstrap Distribution of Correlations - Average Kinectomes', fontsize=16)
+
+        x_min, x_max = 0.8, 1.0  # Adjust these values based on your data range
+
+        for i, task in enumerate(task_names):
+            for j, direction in enumerate(directions):
+                ax = axes[i, j]
+                
+                # Get bootstrap results and observed value
+                bootstrap_rhos = bootstrap_results[task][kinematic][direction]
+                observed_rho = observed_rhos[task][kinematic][direction]
+                
+                if len(bootstrap_rhos) > 0 and observed_rho is not None:
+                    # Plot histogram of bootstrap correlations
+                    ax.hist(bootstrap_rhos, bins=30, alpha=0.7, color='skyblue', edgecolor='black')
+                    
+                    # Mark observed correlation with red line
+                    ax.axvline(observed_rho, color='red', linestyle='--', linewidth=2, 
+                              label=f'Observed ρ = {observed_rho:.3f}')
+                    
+                    # Add statistics
+                    bootstrap_mean = np.mean(bootstrap_rhos)
+                    bootstrap_std = np.std(bootstrap_rhos)
+                    ax.axvline(bootstrap_mean, color='orange', linestyle=':', linewidth=2,
+                              label=f'Bootstrap μ = {bootstrap_mean:.3f}')
+                    
+                    ax.legend(fontsize=8)
+                    ax.set_xlabel('Correlation (ρ)', fontsize=10)
+                    ax.set_ylabel('Frequency', fontsize=10)
+                else:
+                    ax.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax.transAxes)
+                
+                # Set title
+                task_label = task.replace('walk', '').replace('Preferred', 'Preferred').replace('Fast', 'Fast').replace('Slow', 'Slow')
+                ax.set_title(f'{task_label} - {direction}', fontsize=11)
+                ax.grid(True, alpha=0.3)
+                ax.set_xlim(x_min, x_max)
+        
+        plt.tight_layout()
+        
+        # Save plot
+        filename = f'bootstrap_correlations_{kinematic}_{matrix_type}.png'
+        filepath = os.path.join(output_dir, filename)
+        plt.savefig(filepath, dpi=600, bbox_inches='tight')
+        plt.show()
+        
+        print(f"Saved bootstrap plot: {filepath}")
+
+def create_sample_size_plots(sample_size_results, observed_rhos, task_names, kinematics_list, 
+                           matrix_type, subset_fractions, group1, group2):
+    """
+    Create comprehensive plots showing how correlation stability changes with sample size.
+    """
+    
+    # Create output directory
+    output_dir = r"C:\Users\Karolina\Desktop\pykinectome\results\avg_std_matrices\bootstrapping\sample_size_analysis"
+    os.makedirs(output_dir, exist_ok=True)
+    
+    directions = ['AP', 'ML', 'V']
+    
+    for kinematic in kinematics_list:
+        # Plot 1: Mean and variability vs sample size (3x3 subplots)
+        fig1, axes1 = plt.subplots(3, 3, figsize=(18, 12))
+        fig1.suptitle(f'Correlation Stability vs Sample Size - {kinematic} ({matrix_type})', fontsize=16)
+        
+        for i, task in enumerate(task_names):
+            for j, direction in enumerate(directions):
+                ax = axes1[i, j]
+                
+                means = []
+                stds = []
+                sample_percentages = [int(f * 100) for f in subset_fractions]
+                observed_rho = observed_rhos[task][kinematic][direction]
+                
+                for frac in subset_fractions:
+                    bootstrap_rhos = sample_size_results[frac][task][kinematic][direction]
+                    if len(bootstrap_rhos) > 0:
+                        means.append(np.mean(bootstrap_rhos))
+                        stds.append(np.std(bootstrap_rhos))
+                    else:
+                        means.append(np.nan)
+                        stds.append(np.nan)
+                
+                # Plot mean with error bars
+                means = np.array(means)
+                stds = np.array(stds)
+                
+                # Remove NaN values for plotting
+                valid_idx = ~np.isnan(means)
+                if np.any(valid_idx):
+                    ax.errorbar(np.array(sample_percentages)[valid_idx], means[valid_idx], 
+                              yerr=stds[valid_idx], marker='o', linestyle='-', linewidth=2, 
+                              markersize=6, capsize=5, label='Bootstrap Mean ± SD')
+                    
+                    # Add observed value as horizontal line
+                    if observed_rho is not None:
+                        ax.axhline(observed_rho, color='red', linestyle='--', linewidth=2, 
+                                  label=f'Observed ρ = {observed_rho:.3f}')
+                    
+                    ax.legend(fontsize=9)
+                    ax.set_xlabel('Sample Size (%)', fontsize=10)
+                    ax.set_ylabel('Correlation (ρ)', fontsize=10)
+                    ax.grid(True, alpha=0.3)
+                    ax.set_ylim(0, 1.0)
+                else:
+                    ax.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax.transAxes)
+                
+                # Set title
+                task_label = task.replace('walk', '').replace('Preferred', 'Preferred').replace('Fast', 'Fast').replace('Slow', 'Slow')
+                ax.set_title(f'{task_label} - {direction}', fontsize=12)
+        
+        plt.tight_layout()
+        filename1 = f'sample_size_stability_{kinematic}_{matrix_type}.png'
+        filepath1 = os.path.join(output_dir, filename1)
+        plt.savefig(filepath1, dpi=600, bbox_inches='tight')
+        plt.show()
+        
+        # Plot 2: Coefficient of variation (CV) vs sample size
+        fig2, axes2 = plt.subplots(3, 3, figsize=(18, 12))
+        fig2.suptitle(f'Coefficient of Variation vs Sample Size - {kinematic} ({matrix_type})', fontsize=16)
+        
+        for i, task in enumerate(task_names):
+            for j, direction in enumerate(directions):
+                ax = axes2[i, j]
+                
+                cvs = []
+                sample_percentages = [int(f * 100) for f in subset_fractions]
+                
+                for frac in subset_fractions:
+                    bootstrap_rhos = sample_size_results[frac][task][kinematic][direction]
+                    if len(bootstrap_rhos) > 0:
+                        mean_rho = np.mean(bootstrap_rhos)
+                        std_rho = np.std(bootstrap_rhos)
+                        cv = (std_rho / mean_rho) * 100 if mean_rho != 0 else np.nan
+                        cvs.append(cv)
+                    else:
+                        cvs.append(np.nan)
+                
+                cvs = np.array(cvs)
+                valid_idx = ~np.isnan(cvs)
+                
+                if np.any(valid_idx):
+                    ax.plot(np.array(sample_percentages)[valid_idx], cvs[valid_idx], 
+                           marker='o', linestyle='-', linewidth=2, markersize=6, color='purple')
+                    ax.set_xlabel('Sample Size (%)', fontsize=10)
+                    ax.set_ylabel('Coefficient of Variation (%)', fontsize=10)
+                    ax.grid(True, alpha=0.3)
+                    
+                    # Add horizontal line at 5% CV (commonly used threshold for good stability)
+                    ax.axhline(5, color='green', linestyle=':', linewidth=2, alpha=0.7, 
+                              label='5% CV threshold')
+                    ax.legend(fontsize=9)
+                else:
+                    ax.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax.transAxes)
+                
+                # Set title
+                task_label = task.replace('walk', '').replace('Preferred', 'Preferred').replace('Fast', 'Fast').replace('Slow', 'Slow')
+                ax.set_title(f'{task_label} - {direction}', fontsize=12)
+        
+        plt.tight_layout()
+        filename2 = f'coefficient_variation_{kinematic}_{matrix_type}.png'
+        filepath2 = os.path.join(output_dir, filename2)
+        plt.savefig(filepath2, dpi=600, bbox_inches='tight')
+        plt.show()
+        
+        # Plot 3: Distribution comparison at key sample sizes (10%, 50%, 90%)
+        key_fractions = [0.1, 0.5, 0.9]
+        fig3, axes3 = plt.subplots(3, 3, figsize=(18, 12))
+        fig3.suptitle(f'Bootstrap Distributions at Key Sample Sizes - {kinematic} ({matrix_type})', fontsize=16)
+        
+        colors = ['lightcoral', 'skyblue', 'lightgreen']
+        alphas = [0.6, 0.7, 0.8]
+        
+        for i, task in enumerate(task_names):
+            for j, direction in enumerate(directions):
+                ax = axes3[i, j]
+                
+                observed_rho = observed_rhos[task][kinematic][direction]
+                
+                for k, frac in enumerate(key_fractions):
+                    bootstrap_rhos = sample_size_results[frac][task][kinematic][direction]
+                    if len(bootstrap_rhos) > 0:
+                        ax.hist(bootstrap_rhos, bins=20, alpha=alphas[k], color=colors[k], 
+                               edgecolor='black', linewidth=0.5, 
+                               label=f'{int(frac*100)}% sample (μ={np.mean(bootstrap_rhos):.3f})')
+                
+                # Add observed value
+                if observed_rho is not None:
+                    ax.axvline(observed_rho, color='red', linestyle='--', linewidth=2, 
+                              label=f'Observed ρ = {observed_rho:.3f}')
+                
+                ax.legend(fontsize=8)
+                ax.set_xlabel('Correlation (ρ)', fontsize=10)
+                ax.set_ylabel('Frequency', fontsize=10)
+                ax.grid(True, alpha=0.3)
+                
+                # Set title
+                task_label = task.replace('walk', '').replace('Preferred', 'Preferred').replace('Fast', 'Fast').replace('Slow', 'Slow')
+                ax.set_title(f'{task_label} - {direction}', fontsize=12)
+        
+        plt.tight_layout()
+        filename3 = f'distribution_comparison_{kinematic}_{matrix_type}.png'
+        filepath3 = os.path.join(output_dir, filename3)
+        plt.savefig(filepath3, dpi=600, bbox_inches='tight')
+        plt.show()
+        
+        print(f"Saved sample size analysis plots for {kinematic}:")
+        print(f"  - Stability plot: {filepath1}")
+        print(f"  - CV plot: {filepath2}")
+        print(f"  - Distribution comparison: {filepath3}")
+        
+        # Create summary statistics table
+        kinectome_characteristics.create_summary_table(sample_size_results, observed_rhos, task_names, directions, 
+                           kinematic, matrix_type, subset_fractions, output_dir)
