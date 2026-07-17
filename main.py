@@ -54,6 +54,7 @@ from config import (
     PATTERN_DIRECTION,
     PATTERN_MIN_LENGTH,
     PATTERN_MAX_LENGTH,
+    CENTRALITY_MATRIX_MODE
 )
 
 
@@ -64,12 +65,13 @@ def main() -> None:
     # Run this once. Kinectomes are saved as .npy files under
     # BASE_PATH/derived_data/sub-<id>/kinectomes/
     # -------------------------------------------------------------------------
-    # kinectome.calculate_all_kinectomes(
-    #     DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON,
-    #     RAW_DATA_PATH, FS, BASE_PATH, MARKER_LIST, RESULT_BASE_PATH,
-    #     FULL, CORRELATION, INTERPOL,
-    # )
+    kinectome.calculate_all_kinectomes(
+        DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON,
+        RAW_DATA_PATH, FS, BASE_PATH, MARKER_LIST, RESULT_BASE_PATH,
+        FULL, CORRELATION, INTERPOL,
+    )
 
+    print()
     # -------------------------------------------------------------------------
     # Step 2 — Kinectome characteristics
     # Computes mean and standard deviation matrices per group, then uses
@@ -107,7 +109,6 @@ def main() -> None:
     #     RUN, PD_ON, BASE_PATH, RESULT_BASE_PATH, FULL, CORRELATION, INTERPOL,
     # )
 
-    # print()
     # -------------------------------------------------------------------------
     # Step 5 — Modularity analysis (optional)
     # Detects functional communities via Louvain clustering on allegiance
@@ -127,10 +128,11 @@ def main() -> None:
     # and tests for group differences.
     # -------------------------------------------------------------------------
     centrality.centrality_main(
-        DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON,
-        BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL,
-        CORRELATION, INTERPOL, CONSENSUS_COMMUNITIES,
-    )
+            DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON,
+            BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL,
+            CORRELATION, INTERPOL, CONSENSUS_COMMUNITIES,
+            matrix_mode=CENTRALITY_MATRIX_MODE,
+        )
 
     print()
 

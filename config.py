@@ -219,7 +219,7 @@ TRIM_MODE = "cone"
 # directions (AP + ML + V) into a single matrix.
 # False → three separate kinectomes (AP, ML, V) per gait cycle (recommended).
 # True  → one combined kinectome per gait cycle.
-FULL = False
+FULL = True
 
 # Correlation method used to build kinectomes.
 # Options:
@@ -272,15 +272,22 @@ PATTERN_TASK = "walkStroop"
 # Movement direction for pattern analysis: "AP", "ML", or "V".
 PATTERN_DIRECTION = "AP"
 
-# Pattern type: how the strongest path is selected.
-# "max_weight" — path with the maximum sum of edge weights (default).
-# Other types can be added to src/patterns.py and listed here.
-PATTERN_TYPE = "max_weight"
+# Pattern type: how the path is selected at each greedy traversal step (by absolute edge weight).
+# "max_weight"     — strongest link: pick the highest-|weight| neighbour (1st ranked; original default).
+# "max_weight_2nd" — pick the 2nd highest-|weight| neighbour at each step.
+# "max_weight_3rd" — pick the 3rd highest-|weight| neighbour at each step.
+# "min_weight"     — weakest link: pick the lowest-|weight| neighbour at each step.
+# Each type writes to its own pickle/CSV (the type is in the filename), so results stay separate.
+PATTERN_TYPE = "min_weight"
 
 # Pattern path length range to search.
 # Longer paths take more time but capture more complex coordination chains.
 PATTERN_MIN_LENGTH = 2
 PATTERN_MAX_LENGTH = 20
+
+# Whether to use average or standard deviation kinectome for the analysis
+# 'avg' (mean kinectome) or 'std' (stride-to-stride variability)
+PATTERN_MATRIX_TYPE = 'std'   
 
 # --- Modularity analysis ---
 
@@ -302,7 +309,6 @@ MODULARITY_THRESHOLD_LIST = [0.1, 0.7, 0.9, 1.1, 1.3]
 MODULARITY_RESOLUTION_LIST = [1.0, 1.5, 2.0]
 
 
-
 # Number of Louvain iterations per gait cycle for allegiance matrix computation.
 # Higher = more stable but slower. 10 is fast for testing, 100 for final analysis.
 LOUVAIN_ITERATIONS = 10
@@ -321,3 +327,14 @@ CONSENSUS_COMMUNITIES = [
     {'elbow_mas', 'wrist_mas', 'hand_mas',
      'thigh_las', 'shank_las', 'ankle_las', 'toe_las'},
 ]
+
+
+# --- Centrality analysis ---
+# Which centrality quantity to compute. Independent of PATTERN_MATRIX_TYPE:
+# centrality builds graphs per gait cycle, so 'std' must be constructed, not
+# selected as a key. Options:
+#   'avg'                = mean centrality across cycles (original behaviour)
+#   'std_of_centrality'  = stride-to-stride variability of centrality (needs >=2 cycles)
+#   'centrality_of_std'  = centrality of the std-across-cycles kinectome (needs >=2 cycles)
+# Plots/pickle/CSV are written to their own subfolder named after this value.
+CENTRALITY_MATRIX_MODE = 'centrality_of_std'

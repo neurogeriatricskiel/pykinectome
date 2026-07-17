@@ -31,8 +31,17 @@ correlation method. Different combinations each get their own file.
 Configuration (set in config.py)
 ---------------------------------
 PATTERN_TYPE : str
-    How the strongest path is selected. ``"max_weight"`` = maximum sum of
-    edge weights. Other types can be added to this file.
+    How the path is selected at each greedy traversal step (by absolute
+    edge weight). Supported values:
+      ``"max_weight"``  → strongest: pick the highest-|weight| neighbour
+                          (1st ranked). This is the original behaviour.
+      ``"max_weight_2nd"`` → pick the 2nd highest-|weight| neighbour.
+      ``"max_weight_3rd"`` → pick the 3rd highest-|weight| neighbour.
+      ``"min_weight"``  → weakest: pick the lowest-|weight| neighbour.
+    All types use an identical modal-pattern selection, per-subject scoring,
+    and statistical comparison — only the traversal rule differs. Each type
+    writes to its own pickle/CSV (the type is in the filename), so results
+    for min / 2nd / 3rd / max are kept clearly separate.
 PATTERN_REFERENCE_GROUP : str
     Which group's modal pattern is used as the template.
     ``"Control"`` → use control group patterns to compare both groups.
@@ -93,16 +102,140 @@ def jaccard_similarity(edges1, edges2):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Pattern-type traversal dispatch
+# ──────────────────────────────────────────────────────────────────────────────
+
+def ranked_pattern_subgraph(G, length, start_node, rank, largest=True):
+    """Greedy path walk selecting the ``rank``-th neighbour by |weight|.
+
+    Generalises ``strongest_pattern_subgraph`` (rank=0, largest=True) and
+    ``min_pattern_subgraph`` (rank=0, largest=False). At each step the
+    unvisited neighbours are ordered by absolute edge weight and the
+    neighbour at position ``rank`` is chosen:
+
+    * ``largest=True``  → neighbours sorted high→low |weight|; rank 0 = the
+      strongest link, rank 1 = 2nd strongest, rank 2 = 3rd strongest.
+    * ``largest=False`` → neighbours sorted low→high |weight|; rank 0 = the
+      weakest link.
+
+    If fewer than ``rank + 1`` neighbours are available at a step, the walk
+    falls back to the last available (closest-ranked) neighbour so the path
+    can still reach the requested length. Node repetition is not allowed.
+
+    Parameters
+    ----------
+    G : nx.Graph
+        The input graph.
+    length : int
+        Number of nodes to include in the path (edges = length - 1).
+    start_node : node
+        Node to start the path from.
+    rank : int
+        0-based rank of the neighbour to pick at each step.
+    largest : bool
+        Sort neighbours by descending (True) or ascending (False) |weight|.
+
+    Returns
+    -------
+    subgraph : nx.Graph
+        A path subgraph of the given length.
+    """
+    if start_node not in G:
+        raise ValueError(f"Start node {start_node} is not in the graph.")
+    if length < 2:
+        raise ValueError("Length must be at least 2 to form a path.")
+    if G.number_of_nodes() < length:
+        raise ValueError(
+            "Graph does not have enough nodes to form the path of the given length."
+        )
+
+    subgraph = G.__class__()
+    visited = [start_node]
+    current_node = start_node
+
+    while len(visited) < length:
+        neighbors = [
+            (v, G[current_node][v]['weight'])
+            for v in G.neighbors(current_node)
+            if v not in visited and 'weight' in G[current_node][v]
+        ]
+        if not neighbors:
+            raise ValueError(
+                f"No path of the required length found from node {start_node}: "
+                f"dead end at {current_node}."
+            )
+
+        # Order by absolute weight, then take the rank-th (clamped to what exists)
+        ordered = sorted(neighbors, key=lambda x: abs(x[1]), reverse=largest)
+        pick = ordered[min(rank, len(ordered) - 1)]
+        next_node = pick[0]
+        visited.append(next_node)
+        current_node = next_node
+
+    subgraph.add_nodes_from((n, G.nodes[n]) for n in visited)
+    for u, v in zip(visited, visited[1:]):
+        subgraph.add_edge(u, v, **G.get_edge_data(u, v))
+
+    return subgraph
+
+
+# PATTERN_TYPE → (rank, largest) for the greedy neighbour choice at each step.
+_PATTERN_TYPE_SPEC = {
+    'max_weight':     (0, True),   # strongest link  (original behaviour)
+    'max_weight_2nd': (1, True),   # 2nd strongest link
+    'max_weight_3rd': (2, True),   # 3rd strongest link
+    'min_weight':     (0, False),  # weakest link
+}
+
+
+def extract_pattern(G, pattern_length, start_node, pattern_type):
+    """Extract one path subgraph according to ``pattern_type``.
+
+    Dispatches to :func:`ranked_pattern_subgraph`. ``max_weight`` reproduces
+    the original ``strongest_pattern_subgraph`` result exactly.
+
+    Parameters
+    ----------
+    G : nx.Graph
+        Subject graph.
+    pattern_length : int
+        Number of nodes in the path.
+    start_node : node
+        Starting marker.
+    pattern_type : str
+        One of the keys in ``_PATTERN_TYPE_SPEC``.
+
+    Returns
+    -------
+    nx.Graph
+        The extracted path subgraph.
+    """
+    if pattern_type not in _PATTERN_TYPE_SPEC:
+        raise ValueError(
+            f"Unknown PATTERN_TYPE '{pattern_type}'. "
+            f"Expected one of {sorted(_PATTERN_TYPE_SPEC)}."
+        )
+    rank, largest = _PATTERN_TYPE_SPEC[pattern_type]
+    return ranked_pattern_subgraph(
+        G, length=pattern_length, start_node=start_node,
+        rank=rank, largest=largest,
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Core pattern functions
 # ──────────────────────────────────────────────────────────────────────────────
 
 def get_pattern_for_subject(all_kinectomes, marker_list, full,
-                             pattern_length, start_node):
-    """Extract the strongest coordination pattern per subject.
+                             pattern_length, start_node, pattern_type='max_weight',
+                             matrix_type='avg'):
+    """Extract the coordination pattern per subject for ``pattern_type``.
 
     For each subject, builds a weighted graph from their average kinectome
-    and extracts the strongest path of ``pattern_length`` edges starting
-    from ``start_node`` using a greedy maximum-weight traversal.
+    and extracts a path of ``pattern_length`` nodes starting from
+    ``start_node`` using a greedy traversal. The neighbour chosen at each
+    step depends on ``pattern_type`` (strongest / 2nd / 3rd strongest /
+    weakest link by absolute weight); see :func:`extract_pattern`.
 
     Parameters
     ----------
@@ -116,6 +249,8 @@ def get_pattern_for_subject(all_kinectomes, marker_list, full,
         Number of edges in the path.
     start_node : str
         Starting marker node for the path search.
+    pattern_type : str, optional
+        Traversal rule (default ``"max_weight"``).
 
     Returns
     -------
@@ -132,13 +267,13 @@ def get_pattern_for_subject(all_kinectomes, marker_list, full,
                     dirs = all_kinectomes[group][sub_id][task][kinematic]
 
                     if full and dirs.get('full') is not None:
-                        graphs = build_graph(dirs['full']['avg'], marker_list)
+                        graphs = build_graph(dirs['full'][matrix_type], marker_list)
                         direction_labels = ['full']
                     elif not full and all(
                         dirs.get(d) is not None for d in ['AP', 'ML', 'V']
                     ):
                         combined = np.stack(
-                            [dirs['AP']['avg'], dirs['ML']['avg'], dirs['V']['avg']],
+                            [dirs['AP'][matrix_type], dirs['ML'][matrix_type], dirs['V'][matrix_type]],
                             axis=-1
                         )
                         graphs = build_graph(combined, marker_list)
@@ -149,8 +284,10 @@ def get_pattern_for_subject(all_kinectomes, marker_list, full,
                     for idx, G in enumerate(graphs):
                         direction = direction_labels[idx]
                         try:
-                            pattern_graph = kinectome2pattern.strongest_pattern_subgraph(
-                                G, length=pattern_length, start_node=start_node
+                            pattern_graph = extract_pattern(
+                                G, pattern_length=pattern_length,
+                                start_node=start_node,
+                                pattern_type=pattern_type,
                             )
                             key = f"{sub_id}_{task}_{kinematic}_{direction}"
                             subject_patterns[group][key].append({
@@ -233,7 +370,8 @@ def get_avg_group_patterns(subject_patterns, pattern_length, start_node):
 
 def get_pattern_values_for_subjects(all_kinectomes, group_patterns, full,
                                      marker_list, result_base_path,
-                                     pattern_length, start_node, save_csv=False):
+                                     pattern_length, start_node, save_csv=False,
+                                     matrix_type='avg'):
     """Evaluate the group pattern strength on every subject.
 
     For each group-level reference pattern, builds each subject's kinectome
@@ -285,7 +423,7 @@ def get_pattern_values_for_subjects(all_kinectomes, group_patterns, full,
                         )
 
                         for direction in direction_list:
-                            matrix = dirs[direction]['avg'] if dirs[direction] else None
+                            matrix = dirs[direction][matrix_type] if dirs[direction] else None
                             if matrix is None:
                                 continue
 
@@ -312,9 +450,20 @@ def get_pattern_values_for_subjects(all_kinectomes, group_patterns, full,
                                     edge_weights_with_nodes, key=lambda x: x[0]
                                 )
                                 weakest_link = f"{weakest_edge[0]}-{weakest_edge[1]}"
+                                drop_reason = ''
                             else:
                                 path_sum = np.nan
                                 weakest_link = None
+                                # Why did this subject fail to score? Record the
+                                # missing edge(s) so a sub-18 comparison can be
+                                # traced to an exact edge rather than guessed at.
+                                if missing_edges:
+                                    drop_reason = (
+                                        'missing_edge:' +
+                                        ','.join(f'{u}-{v}' for u, v in missing_edges)
+                                    )
+                                else:
+                                    drop_reason = 'no_edges'
 
                             pattern_values_data.append({
                                 'Pattern_Group':  pattern_group,
@@ -326,6 +475,7 @@ def get_pattern_values_for_subjects(all_kinectomes, group_patterns, full,
                                 'Pattern':        pattern_name,
                                 'Path_Sum':       path_sum,
                                 'Weakest_Link':   weakest_link,
+                                'Drop_Reason':    drop_reason,
                             })
 
     df = pd.DataFrame(pattern_values_data)
@@ -380,10 +530,49 @@ def compare_groups_statistical(pattern_values_df, pattern_group,
             mask &= df['Task'] == task
         return df[mask]
 
-    data1 = _filter(pattern_values_df, subject_group1)['Path_Sum'].dropna()
-    data2 = _filter(pattern_values_df, subject_group2)['Path_Sum'].dropna()
+    # ── Diagnostics: how many subjects actually enter this comparison? ────────
+    # A fully-connected graph with bound_value=None means EVERY subject should
+    # score EVERY predefined group path. If the retained n is ever below the
+    # number of rows the filter returned, subjects are being dropped (NaN
+    # Path_Sum) and the reason is printed so it can be traced to an exact edge.
+    rows1 = _filter(pattern_values_df, subject_group1)
+    rows2 = _filter(pattern_values_df, subject_group2)
+
+    data1 = rows1['Path_Sum'].dropna()
+    data2 = rows2['Path_Sum'].dropna()
+
+    n1_total, n1_kept = len(rows1), len(data1)
+    n2_total, n2_kept = len(rows2), len(data2)
+    n1_uniq = rows1['Subject'].nunique()
+    n2_uniq = rows2['Subject'].nunique()
+
+    def _drop_report(rows, group):
+        dropped = rows[rows['Path_Sum'].isna()]
+        if dropped.empty:
+            return ''
+        if 'Drop_Reason' in dropped.columns:
+            reasons = dropped['Drop_Reason'].value_counts().to_dict()
+            detail = '; '.join(f'{r}×{c}' for r, c in reasons.items())
+        else:
+            detail = 'unknown'
+        subs = ','.join(sorted(dropped['Subject'].unique()))
+        return f"[{group}] {len(dropped)} dropped ({subs}) reasons: {detail}"
+
+    if n1_kept != n1_total or n2_kept != n2_total:
+        print(f"  ⚠ SUBJECT DROP in {task} {direction} {kinematics} "
+              f"({pattern_group} pattern): "
+              f"{subject_group1} {n1_kept}/{n1_total} (unique subj={n1_uniq}), "
+              f"{subject_group2} {n2_kept}/{n2_total} (unique subj={n2_uniq})")
+        rep1 = _drop_report(rows1, subject_group1)
+        rep2 = _drop_report(rows2, subject_group2)
+        if rep1:
+            print(f"      {rep1}")
+        if rep2:
+            print(f"      {rep2}")
 
     if len(data1) < 3 or len(data2) < 3:
+        print(f"  ✗ SKIPPED (n<3) in {task} {direction} {kinematics}: "
+              f"{subject_group1} n={len(data1)}, {subject_group2} n={len(data2)}")
         return None
 
     raw1 = pattern_values_df[
@@ -444,9 +633,13 @@ def compare_groups_statistical(pattern_values_df, pattern_group,
         'g1_mean':         round(data1.mean(), 3),
         'g1_std':          round(data1.std(ddof=1), 3),
         'g1_n':            len(data1),
+        'g1_n_total':      n1_total,
+        'g1_n_dropped':    n1_total - n1_kept,
         'g2_mean':         round(data2.mean(), 3),
         'g2_std':          round(data2.std(ddof=1), 3),
         'g2_n':            len(data2),
+        'g2_n_total':      n2_total,
+        'g2_n_dropped':    n2_total - n2_kept,
         'effect_size':     round(effect, 3),
     }
 
@@ -503,6 +696,7 @@ def patterns_main(marker_list_affect, diagnosis, kinematics_list, task_names,
         PATTERN_MIN_LENGTH,
         PATTERN_MAX_LENGTH,
         PATTERN_TYPE,
+        PATTERN_MATRIX_TYPE,
         KINECTOME_SAVE_PATH,
         EXCLUDE_MARKERS_BY_TASK,
     )
@@ -510,10 +704,24 @@ def patterns_main(marker_list_affect, diagnosis, kinematics_list, task_names,
     save_dir = Path(result_base_path) / 'patterns'
     save_dir.mkdir(parents=True, exist_ok=True)
 
+    # Validate & label the requested pattern type up front.
+    if PATTERN_TYPE not in _PATTERN_TYPE_SPEC:
+        raise ValueError(
+            f"config.PATTERN_TYPE = '{PATTERN_TYPE}' is not supported. "
+            f"Choose one of: {sorted(_PATTERN_TYPE_SPEC)}."
+        )
+    _PATTERN_TYPE_LABEL = {
+        'max_weight':     'highest (1st) weighted link',
+        'max_weight_2nd': '2nd highest weighted link',
+        'max_weight_3rd': '3rd highest weighted link',
+        'min_weight':     'lowest (weakest) weighted link',
+    }
+    pattern_type_label = _PATTERN_TYPE_LABEL[PATTERN_TYPE]
+
     pickle_path = save_dir / (
-        f"patterns_{PATTERN_TYPE}_{PATTERN_REFERENCE_GROUP}_{PATTERN_TASK}_"
-        f"{PATTERN_DIRECTION}_{correlation}.pkl"
-    )
+            f"patterns_{PATTERN_TYPE}_{PATTERN_MATRIX_TYPE}_{PATTERN_REFERENCE_GROUP}_"
+            f"{PATTERN_TASK}_{PATTERN_DIRECTION}_{correlation}.pkl"
+        )
 
     # Effective markers (after task-specific exclusion) — needed in both branches
     exclude = EXCLUDE_MARKERS_BY_TASK.get(PATTERN_TASK, [])
@@ -532,7 +740,7 @@ def patterns_main(marker_list_affect, diagnosis, kinematics_list, task_names,
         print(f"  Reference group : {PATTERN_REFERENCE_GROUP}")
         print(f"  Task            : {PATTERN_TASK}")
         print(f"  Direction       : {PATTERN_DIRECTION}")
-        print(f"  Pattern type    : {PATTERN_TYPE}")
+        print(f"  Pattern type    : {PATTERN_TYPE}  ({pattern_type_label})")
         print(f"  Pickle will be  : {pickle_path.name}")
         if exclude:
             print(f"  Excluding markers for {PATTERN_TASK}: {exclude}")
@@ -552,20 +760,35 @@ def patterns_main(marker_list_affect, diagnosis, kinematics_list, task_names,
         # Filter to the chosen task, keeping all three directions.
         # Subjects without all three directions are excluded.
         task_kinectomes = {}
+        dropped_at_filter = {}
         for group in all_kinectomes:
             task_kinectomes[group] = {}
+            dropped_at_filter[group] = []
             for sub_id, sub_data in all_kinectomes[group].items():
                 if PATTERN_TASK not in sub_data:
+                    dropped_at_filter[group].append(f"{sub_id}(no_task)")
                     continue
+                kept = False
                 for kin in sub_data[PATTERN_TASK]:
                     dirs = sub_data[PATTERN_TASK][kin]
-                    if all(dirs.get(d) is not None for d in ['AP', 'ML', 'V']):
+                    present = [d for d in ['AP', 'ML', 'V'] if dirs.get(d) is not None]
+                    if len(present) == 3:
                         task_kinectomes[group][sub_id] = {
                             PATTERN_TASK: {kin: dirs}
                         }
+                        kept = True
+                    else:
+                        missing = [d for d in ['AP', 'ML', 'V'] if d not in present]
+                        dropped_at_filter[group].append(
+                            f"{sub_id}(missing:{'/'.join(missing)})")
+                # (kept flag retained for clarity; no-op if already added)
 
         n_per_group = {g: len(task_kinectomes[g]) for g in task_kinectomes}
         print(f"  Subjects with all directions: {n_per_group}")
+        for group, dropped in dropped_at_filter.items():
+            if dropped:
+                print(f"  ⚠ {group}: {len(dropped)} subject(s) dropped BEFORE "
+                      f"scoring (incomplete directions/task): {', '.join(dropped)}")
 
         # Determine group names
         group_names  = list(all_kinectomes.keys())
@@ -586,8 +809,10 @@ def patterns_main(marker_list_affect, diagnosis, kinematics_list, task_names,
 
                 subject_patterns = get_pattern_for_subject(
                     task_kinectomes, effective_markers, full,
-                    pattern_length, start_node
+                    pattern_length, start_node, pattern_type=PATTERN_TYPE,
+                    matrix_type=PATTERN_MATRIX_TYPE
                 )
+
                 group_patterns = get_avg_group_patterns(
                     subject_patterns, pattern_length, start_node
                 )
@@ -598,7 +823,8 @@ def patterns_main(marker_list_affect, diagnosis, kinematics_list, task_names,
                 pattern_values_df = get_pattern_values_for_subjects(
                     task_kinectomes, group_patterns, full,
                     effective_markers, result_base_path,
-                    pattern_length, start_node, save_csv=False
+                    pattern_length, start_node, save_csv=False,
+                    matrix_type=PATTERN_MATRIX_TYPE
                 )
 
                 if pattern_values_df.empty:
@@ -616,6 +842,8 @@ def patterns_main(marker_list_affect, diagnosis, kinematics_list, task_names,
                         task=PATTERN_TASK,
                     )
                     if result is not None:
+                        result['pattern_type']       = PATTERN_TYPE
+                        result['pattern_type_label'] = pattern_type_label
                         result['pattern_edges_raw'] = group_patterns.get(
                             ref_group, {}
                         ).get('edges', [])
@@ -651,6 +879,8 @@ def patterns_main(marker_list_affect, diagnosis, kinematics_list, task_names,
                 'pattern_length':    pattern_length,
                 'start_node':        start_node,
                 'direction':         direction,
+                'pattern_type':      r.get('pattern_type', ''),
+                'pattern_type_label':r.get('pattern_type_label', ''),
                 'task':              r.get('task', ''),
                 'kinematics':        r.get('kinematics', ''),
                 'pattern_group':     r.get('pattern_group', ''),
@@ -678,9 +908,13 @@ def patterns_main(marker_list_affect, diagnosis, kinematics_list, task_names,
                 f'{g1}_mean':        r.get('g1_mean', ''),
                 f'{g1}_std':         r.get('g1_std', ''),
                 f'{g1}_n':           r.get('g1_n', ''),
+                f'{g1}_n_total':     r.get('g1_n_total', ''),
+                f'{g1}_n_dropped':   r.get('g1_n_dropped', ''),
                 f'{g2}_mean':        r.get('g2_mean', ''),
                 f'{g2}_std':         r.get('g2_std', ''),
                 f'{g2}_n':           r.get('g2_n', ''),
+                f'{g2}_n_total':     r.get('g2_n_total', ''),
+                f'{g2}_n_dropped':   r.get('g2_n_dropped', ''),
             })
 
         summary_df = pd.DataFrame(rows)
@@ -739,6 +973,47 @@ def patterns_main(marker_list_affect, diagnosis, kinematics_list, task_names,
         print(f"  Total comparisons       : {len(summary_df)}")
         print(f"  Significant uncorrected : {n_sig_raw}")
         print(f"  Significant Bonferroni  : {n_sig_bonf}")
+
+        # ── Data-integrity check ─────────────────────────────────────────────
+        # With a fully-connected graph every retained comparison should use the
+        # full group n. Report any comparison where subjects were dropped, and
+        # the distribution of group sizes actually used.
+        g1c, g2c = f'{g1}_n', f'{g2}_n'
+        dcols = [c for c in (f'{g1}_n_dropped', f'{g2}_n_dropped')
+                 if c in summary_df.columns]
+        if dcols:
+            drop_mask = (summary_df[dcols].apply(
+                pd.to_numeric, errors='coerce').fillna(0).sum(axis=1) > 0)
+            n_reduced = int(drop_mask.sum())
+            print(f"  Comparisons with dropped subjects : {n_reduced}"
+                  f" / {len(summary_df)}")
+            if n_reduced:
+                print("    → pipeline is NOT scoring all subjects on every "
+                      "pattern; inspect Drop_Reason / *_n_dropped in the CSV.")
+                worst = summary_df[drop_mask].copy()
+                worst['_tot_drop'] = worst[dcols].apply(
+                    pd.to_numeric, errors='coerce').fillna(0).sum(axis=1)
+                worst = worst.sort_values('_tot_drop', ascending=False).head(5)
+                for _, row in worst.iterrows():
+                    print(f"      len={int(row['pattern_length'])}, "
+                          f"start={row['start_node']}, dir={row['direction']}: "
+                          f"{g1}_n={row.get(g1c,'?')}, {g2}_n={row.get(g2c,'?')} "
+                          f"(dropped {int(row['_tot_drop'])})")
+            else:
+                print("    → all retained comparisons used the full group n. ✓")
+        # Distribution of group sizes actually entering the tests
+        try:
+            print(f"  {g1} n used — min/median/max: "
+                  f"{int(summary_df[g1c].min())}/"
+                  f"{int(summary_df[g1c].median())}/"
+                  f"{int(summary_df[g1c].max())}")
+            print(f"  {g2} n used — min/median/max: "
+                  f"{int(summary_df[g2c].min())}/"
+                  f"{int(summary_df[g2c].median())}/"
+                  f"{int(summary_df[g2c].max())}")
+        except Exception:
+            pass
+
         if n_sig_bonf > 0:
             print("  Top results (Bonferroni):")
             for _, row in summary_df[summary_df['significant_bonf']].head(5).iterrows():

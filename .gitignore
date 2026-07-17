@@ -10,6 +10,7 @@ src/data_utils/plotting_for_manuscript.py
 src/preprocessing/plot_interpolated.py
 src/kinectome1_revision.py
 
+# Result files
 results/
 *.npy
 *.pkl
