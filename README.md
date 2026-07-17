@@ -10,9 +10,8 @@ Based on the Keep Control lab dataset (BIDS-formatted optical motion capture, 20
 
 ## Method references
 
-- **Kinectome concept:** Warmerdam et al. (2021). *Long-term unsupervised mobility assessment in movement disorders.* Lancet Neurology.
+- **Kinectome concept:** Troisi Lopez et al. (2022). *The kinectome: A comprehensive kinematic map of human motion in health and disease.* Annals of the New York Academy of Sciences. 
 - **Gait event detection:** Bonci et al. (2022). *An algorithm for accurate marker-based gait event detection in healthy and pathological populations during complex motor tasks.* Frontiers in Bioengineering and Biotechnology.
-- **Community detection:** Louvain algorithm — Blondel et al. (2008). *Fast unfolding of communities in large networks.* Journal of Statistical Mechanics.
 - **Reference communities:** Kluge et al. (2021); Warmerdam et al. (2021); Meyns et al. (2013).
 
 ---
