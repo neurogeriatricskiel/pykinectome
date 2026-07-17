@@ -109,14 +109,23 @@ def calc_std_avg_matrices(diagnosis, kinematics_list, task_names, tracking_syste
                                     # Calculate standard deviation kinectome for this direction
                                     std_kinectome = np.std(direction_stack, axis=0)
                                     
+                                    # Mean absolute change between consecutive single-cycle kinectomes
+                                    # (edge-wise stride-to-stride reconfiguration rate)
+                                    if direction_stack.shape[0] > 1:
+                                        reconfig_kinectome = np.mean(np.abs(np.diff(direction_stack, axis=0)), axis=0)
+                                    else:
+                                        reconfig_kinectome = np.full_like(avg_kinectome, np.nan)
+
                                     # Store the results in variability_scores - using explicit check for None
                                     # This avoids the numpy array comparison issue
                                     current_value = variability_scores[group][sub_id][task_name][kinematics][direction]
                                     if current_value is None:
                                         variability_scores[group][sub_id][task_name][kinematics][direction] = {
                                             "avg": avg_kinectome,
-                                            "std": std_kinectome
+                                            "std": std_kinectome,
+                                            "reconfig": reconfig_kinectome
                                         }
+                                        
                                     else:
                                         # If you have multiple runs/tracking systems that should be combined,
                                         # you might need to implement a strategy here for combining them
