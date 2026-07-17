@@ -16,7 +16,7 @@ def weighted_degree_centrality(G):
     
     return {node: sum(weight for _, _, weight in G.edges(node, data='weight')) for node in G.nodes()}
 
-def export_centrality_to_csv(group_centrality_data, save_path=None):
+def export_centrality_to_csv(group_centrality_data, save_path=None, matrix_mode='avg'):
     """
     Export centrality data to a single CSV file with all body segments.
     Each column is named as: {segment}_{task}_{direction}
@@ -26,6 +26,9 @@ def export_centrality_to_csv(group_centrality_data, save_path=None):
     analysis. Any other task (e.g. walkStroop) is passed through using the
     task name itself with the leading 'walk' stripped, so its data is not
     silently dropped.
+
+    ``matrix_mode`` is appended to the filename so the three centrality modes
+    ('avg', 'std_of_centrality', 'centrality_of_std') write to separate files.
     """
     if save_path is None:
         save_path = Path("results") / "centrality" / "csv"
@@ -103,7 +106,7 @@ def export_centrality_to_csv(group_centrality_data, save_path=None):
     df = df[column_order]
    
     # Save to CSV
-    csv_filename = "all_segments_centrality.csv"
+    csv_filename = f"all_segments_centrality_{matrix_mode}.csv"
     df.to_csv(save_path / csv_filename, index=False)
     print(f"Saved {csv_filename}")
    
@@ -148,11 +151,42 @@ def community_weighted_degree_centrality(G, consensus_communities):
     return centrality
 
 def centrality_main(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list, result_base_path, full, 
-                    correlation_method, interpol, consensus_communities, community_centrality = False):
+                    correlation_method, interpol, consensus_communities, community_centrality = False,
+                    matrix_mode = 'avg'):
+    """
+    matrix_mode : str
+        Which centrality quantity to compute and store.
+          'avg'                → mean weighted-degree centrality across gait
+                                  cycles (original behaviour).
+          'std_of_centrality'  → Option A: stride-to-stride variability (std)
+                                  of per-cycle centrality. Measures how much a
+                                  segment's coordination centrality fluctuates
+                                  across cycles. Requires ≥2 cycles.
+          'centrality_of_std'  → Option B: centrality computed once on the
+                                  std-across-cycles kinectome graph. Measures
+                                  how central a segment is in the *variability*
+                                  network. Requires ≥2 cycles.
+        Each mode writes to its own pickle and CSV (mode is in the filename),
+        so the three sets of results never overwrite one another.
+    """
     
-    # Modify pickle path to distinguish between regular and community centrality
+    # Modify pickle path to distinguish between regular and community centrality,
+    # and between the three matrix modes.
+    # Fail loudly on an unrecognized mode. Without this, a value like 'std'
+    # would silently fall through to the averaging branch and produce mean
+    # centrality inside a folder named after the bad value.
+    _valid_modes = {'avg', 'std_of_centrality', 'centrality_of_std'}
+    if matrix_mode not in _valid_modes:
+        raise ValueError(
+            f"Unknown matrix_mode {matrix_mode!r}. "
+            f"Expected one of {sorted(_valid_modes)}. "
+            f"Note: 'std' is NOT valid here — centrality builds graphs per gait "
+            f"cycle, so you must choose 'std_of_centrality' (std of per-cycle "
+            f"centrality) or 'centrality_of_std' (centrality of the std kinectome)."
+        )
+
     centrality_type = 'community' if community_centrality else 'regular'
-    centrality_pickle_path = Path(result_base_path, 'centrality', f'centrality_data_{correlation_method}_{centrality_type}.pkl')
+    centrality_pickle_path = Path(result_base_path, 'centrality', f'centrality_data_{correlation_method}_{centrality_type}_{matrix_mode}.pkl')
     centrality_pickle_path.parent.mkdir(parents=True, exist_ok=True)
 
     if not centrality_pickle_path.exists():
@@ -233,7 +267,29 @@ def centrality_main(diagnosis, kinematics_list, task_names, tracking_systems, ru
                             graphs = all_graphs_for_subject(kinectomes, current_markers, bound_value=None)
                             subject_average_weights = {}
 
+                            # Precompute the per-direction std kinectome graph for mode B.
+                            # (std across cycles of the raw kinectome, then one graph.)
+                            std_graphs = None
+                            if matrix_mode == 'centrality_of_std':
+                                if kinectomes and len(kinectomes) > 1:
+                                    std_kinectome = np.std(np.stack(kinectomes, axis=0), axis=0)
+                                    std_graphs = all_graphs_for_subject([std_kinectome], current_markers, bound_value=None)
+                                else:
+                                    std_graphs = None
+
                             for direction in ['AP', 'ML', 'V']:
+                                if matrix_mode == 'centrality_of_std':
+                                    # Mode B: centrality of the single std-kinectome graph.
+                                    if not std_graphs or not std_graphs.get(direction):
+                                        continue
+                                    std_graph = std_graphs[direction][0]
+                                    if community_centrality:
+                                        weights = community_weighted_degree_centrality(std_graph, consensus_communities)
+                                    else:
+                                        weights = weighted_degree_centrality(std_graph)
+                                    subject_average_weights[direction] = weights
+                                    continue
+
                                 direction_graphs = graphs[direction]
                                 if not direction_graphs:
                                     continue
@@ -247,8 +303,16 @@ def centrality_main(diagnosis, kinematics_list, task_names, tracking_systems, ru
                                     total_weights.append(weights)
                                 if not total_weights:
                                     continue
-                                average_weights = {node: np.mean([w[node] for w in total_weights]) for node in total_weights[0]}
-                                subject_average_weights[direction] = average_weights
+                                if matrix_mode == 'std_of_centrality':
+                                    # Mode A: stride-to-stride variability of centrality.
+                                    # Needs ≥2 cycles for a meaningful std.
+                                    if len(total_weights) < 2:
+                                        continue
+                                    agg_weights = {node: np.std([w[node] for w in total_weights]) for node in total_weights[0]}
+                                else:
+                                    # Default 'avg': mean centrality across cycles (original behaviour).
+                                    agg_weights = {node: np.mean([w[node] for w in total_weights]) for node in total_weights[0]}
+                                subject_average_weights[direction] = agg_weights
 
                             # Store individual subject data for each node
                             for direction in ['AP', 'ML', 'V']:
@@ -268,13 +332,14 @@ def centrality_main(diagnosis, kinematics_list, task_names, tracking_systems, ru
                         for node, v in group_centrality_data[grp][sid][tsk][d].items():
                             if v is not None and np.isfinite(v):
                                 _n_values += 1
-        print(f"[centrality] stored {_n_values} finite centrality values "
+        print(f"[centrality:{matrix_mode}] stored {_n_values} finite centrality values "
               f"across {len(group_centrality_data.get(group_name, {}))} {group_name} "
               f"+ {len(group_centrality_data.get('Control', {}))} Control subjects")
         if _n_values == 0:
             print("[centrality] WARNING: no centrality values were computed — "
                   "check that load_kinectomes is finding files and all_graphs_for_subject "
-                  "returns non-empty graphs for these subjects/tasks.")
+                  "returns non-empty graphs for these subjects/tasks. For std modes, also "
+                  "check that subjects have >1 gait cycle.")
 
         # Drop subjects/tasks that ended up with no usable data so the CSV and
         # downstream stats only see real observations.
@@ -312,12 +377,12 @@ def centrality_main(diagnosis, kinematics_list, task_names, tracking_systems, ru
                 f"so the data is recomputed with the current code."
             )
 
-    csv_save_path, centrality_df = export_centrality_to_csv(group_centrality_data)
+    csv_save_path, centrality_df = export_centrality_to_csv(group_centrality_data, matrix_mode=matrix_mode)
 
     # Diagnostic: how much real data reached the DataFrame the stats will use.
     _value_cols = [c for c in centrality_df.columns if c not in ('group', 'subject_id')]
     _n_finite = int(centrality_df[_value_cols].notna().to_numpy().sum())
-    print(f"[centrality] DataFrame: {len(centrality_df)} subjects, "
+    print(f"[centrality:{matrix_mode}] DataFrame: {len(centrality_df)} subjects, "
           f"{_n_finite} finite values across {len(_value_cols)} segment/speed/direction columns")
     if _n_finite == 0:
         print("[centrality] WARNING: DataFrame is all-NaN — no task data reached the "
@@ -345,7 +410,7 @@ def centrality_main(diagnosis, kinematics_list, task_names, tracking_systems, ru
         # TO DO: save dir as global variable
         plot_community_nodal_strength(
             centrality_df, consensus_communities, results,
-            save_dir=Path(result_base_path) / "community_plots"
+            save_dir=Path(result_base_path) / "community_plots" / matrix_mode
         )
 
     # --- Single-condition tasks (e.g. walkStroop): no speed axis ---
@@ -353,7 +418,7 @@ def centrality_main(diagnosis, kinematics_list, task_names, tracking_systems, ru
     for task_prefix in other_present:
         plot_community_nodal_strength_single_task(
             centrality_df, consensus_communities, task_prefix,
-            save_dir=Path(result_base_path) / "community_plots" / task_prefix
+            save_dir=Path(result_base_path) / "community_plots" / matrix_mode / task_prefix
         )
 
     return
