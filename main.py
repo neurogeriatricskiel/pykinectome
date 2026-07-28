@@ -45,7 +45,6 @@ from config import (
     PD_ON,
     FULL,
     CORRELATION,
-    INTERPOL,
     COMMUNITY_THRESHOLD,
     CLUSTERING_METHOD,
     CONSENSUS_COMMUNITIES,
@@ -68,8 +67,29 @@ def main() -> None:
     kinectome.calculate_all_kinectomes(
         DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON,
         RAW_DATA_PATH, FS, BASE_PATH, MARKER_LIST, RESULT_BASE_PATH,
-        FULL, CORRELATION, INTERPOL,
+        FULL, CORRELATION,
     )
+
+    import numpy as np
+    import matplotlib.pyplot as plt
+
+    path = r"C:\Users\Karolina\Desktop\pykinectome\kinectomes\sub-pp011\sub-pp011_task-walkStroop_tracksys-omc_acc_kinct9751-9993_pears_full.npy"
+
+    mat = np.load(path)
+
+    fig, ax = plt.subplots(figsize=(8, 7))
+    im = ax.imshow(mat, cmap="RdBu_r", vmin=-1, vmax=1)
+    fig.colorbar(im, ax=ax, label="Pearson r")
+
+    ax.set_xticks(range(mat.shape[1]))
+    ax.set_yticks(range(mat.shape[0]))
+    ax.set_xticklabels(range(mat.shape[1]), rotation=90, fontsize=6)
+    ax.set_yticklabels(range(mat.shape[0]), fontsize=6)
+    ax.set_title("sub-pp011 walkStroop kinectome (Pearson)")
+
+    fig.tight_layout()
+    fig.savefig(path.replace(".npy", "_plot.png"), dpi=150)
+    plt.show()
 
     print()
     # -------------------------------------------------------------------------
@@ -83,7 +103,7 @@ def main() -> None:
 
     # kinectome_characteristics.compare_between_groups(
     #     DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON,
-    #     BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL, CORRELATION, INTERPOL,
+    #     BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL, CORRELATION,
     # )
 
     # -------------------------------------------------------------------------
@@ -106,7 +126,7 @@ def main() -> None:
     # -------------------------------------------------------------------------
     # patterns.patterns_main(
     #     MARKER_LIST_AFFECT, DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS,
-    #     RUN, PD_ON, BASE_PATH, RESULT_BASE_PATH, FULL, CORRELATION, INTERPOL,
+    #     RUN, PD_ON, BASE_PATH, RESULT_BASE_PATH, FULL, CORRELATION,
     # )
 
     # -------------------------------------------------------------------------
@@ -130,7 +150,7 @@ def main() -> None:
     centrality.centrality_main(
             DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON,
             BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL,
-            CORRELATION, INTERPOL, CONSENSUS_COMMUNITIES,
+            CORRELATION, CONSENSUS_COMMUNITIES,
             matrix_mode=CENTRALITY_MATRIX_MODE,
         )
 

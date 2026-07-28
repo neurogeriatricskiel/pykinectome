@@ -228,10 +228,6 @@ FULL = True
 #   "dcor"  — distance correlation (captures non-linear dependencies)
 CORRELATION = "pears"
 
-# Whether to use gap-filled (interpolated) kinectome data.
-# True is recommended; requires the interpolation preprocessing step.
-INTERPOL = True
-
 # --- Permutation & bootstrap testing ---
 
 # Whether to run bootstrap-wrapped permutation testing.

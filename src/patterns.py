@@ -650,7 +650,7 @@ def compare_groups_statistical(pattern_values_df, pattern_group,
 
 def patterns_main(marker_list_affect, diagnosis, kinematics_list, task_names,
                   tracking_systems, run, pd_on, base_path, result_base_path,
-                  full, correlation, interpol):
+                  full, correlation):
     """Run the full pattern analysis pipeline.
 
     Loads kinectomes once, then for every (pattern_length, start_node):
@@ -686,8 +686,6 @@ def patterns_main(marker_list_affect, diagnosis, kinematics_list, task_names,
         Use full combined-direction kinectomes.
     correlation : str
         Correlation method (e.g. ``'pears'``).
-    interpol : bool
-        Kinectomes built from interpolated gait cycles.
     """
     from config import (
         PATTERN_REFERENCE_GROUP,
@@ -751,7 +749,7 @@ def patterns_main(marker_list_affect, diagnosis, kinematics_list, task_names,
         print("  Loading kinectomes...")
         result = calc_std_avg_matrices(
                 diagnosis, kinematics_list, task_names, tracking_systems, run,
-                pd_on, base_path, full, correlation, interpol
+                pd_on, base_path, full, correlation
             )
         # calc_std_avg_matrices returns 2 or 4 values depending on version
         all_kinectomes = result[0]

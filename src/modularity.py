@@ -3084,7 +3084,8 @@ def run_threshold_analysis(diagnosis, kinematics_list, task_names, tracking_syst
     
     return all_results, stats_results
 
-def modularity_main(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list, result_base_path, full, 
+def modularity_main(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, 
+                    marker_list, result_base_path, full, 
                     correlation_method, threshold, clustering_method, consensus_communities):
     
 

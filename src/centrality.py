@@ -151,7 +151,7 @@ def community_weighted_degree_centrality(G, consensus_communities):
     return centrality
 
 def centrality_main(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list, result_base_path, full, 
-                    correlation_method, interpol, consensus_communities, community_centrality = False,
+                    correlation_method, consensus_communities, community_centrality = False,
                     matrix_mode = 'avg'):
     """
     matrix_mode : str
@@ -246,7 +246,8 @@ def centrality_main(diagnosis, kinematics_list, task_names, tracking_systems, ru
                             else:
                                 run = run
 
-                            kinectomes = load_kinectomes(KINECTOME_SAVE_PATH, sub_id, task_name, tracksys, run, kinematics, full, correlation_method, interpol)
+                            kinectomes = load_kinectomes(KINECTOME_SAVE_PATH, sub_id, task_name, tracksys, 
+                                                         run, kinematics, full, correlation_method)
 
                             if kinectomes is None:
                                 continue
