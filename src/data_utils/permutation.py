@@ -10,11 +10,28 @@ from src.data_utils import plotting
 import random
 
 
+def _infer_directions(variability_scores):
+    """Return the direction keys present in the data: ['full'] for full
+    kinectomes, ['AP','ML','V'] for directional ones. Falls back to the
+    directional default if the structure can't be inspected."""
+    for group in variability_scores.values():
+        for sub_data in group.values():
+            for task_data in sub_data.values():
+                for kin_data in task_data.values():
+                    if kin_data:
+                        return list(kin_data.keys())
+    return ['AP', 'ML', 'V']
+
+
 def get_adaptive_subgroups(matrix, marker_list):
     """
     Return subgroups of body segments that adapt based on matrix dimensions
     and the actual markers present in marker_list.
     Markers excluded from the kinectome are automatically removed from subgroups.
+
+    Works whether marker_list is a base list (e.g. 'head') or an already-expanded
+    per-direction list (e.g. 'head_AP', 'head_ML', 'head_V'): subgroup membership
+    is decided by the base marker name, so expanded labels are grouped correctly.
     """
     base_subgroups = {
         "upper_body": ['head', 'sternum', 'shoulder_las', 'shoulder_mas', 'asis_las', 'asis_mas', 'psis_las', 'psis_mas',
@@ -22,27 +39,42 @@ def get_adaptive_subgroups(matrix, marker_list):
         "lower_body": ['thigh_las', 'shank_las', 'ankle_las', 'toe_las', 'thigh_mas', 'shank_mas', 'ankle_mas', 'toe_mas']
     }
 
-    # Check if expansion is needed
-    needs_expansion = matrix.shape != (len(marker_list), len(marker_list))
+    def _base_name(m):
+        # Strip a trailing direction suffix (_AP/_ML/_V) if present.
+        for d in ('_AP', '_ML', '_V'):
+            if m.endswith(d):
+                return m[:-len(d)]
+        return m
 
-    if needs_expansion:
-        subgroups = {group: expand_marker_list(markers) for group, markers in base_subgroups.items()}
-    else:
-        subgroups = base_subgroups
+    # Assign each entry in marker_list to a subgroup by its base marker name.
+    # This keeps expanded labels ('head_AP') together with their group and
+    # ensures the labels used for shuffling are exactly those in marker_list.
+    base_to_group = {}
+    for group, markers in base_subgroups.items():
+        for m in markers:
+            base_to_group[m] = group
 
-    # Filter each subgroup to only include markers present in marker_list
-    marker_set = set(marker_list)
-    return {group: [m for m in markers if m in marker_set]
-            for group, markers in subgroups.items()}
+    subgroups = {group: [] for group in base_subgroups}
+    for m in marker_list:
+        group = base_to_group.get(_base_name(m))
+        if group is not None:
+            subgroups[group].append(m)
+
+    return subgroups
 
 def permute(matrix1, matrix2, marker_list, task, matrix_type, kinematic, direction, result_base_path, correlation_method, n_iter):
 
-    
-    # Define subgroups of body segments (marker labels) for shuffling
-    subgroups = get_adaptive_subgroups(matrix1, marker_list)
-
-    if matrix1.shape != (len(marker_list),len(marker_list)):
+    # Expand the marker list to per-direction labels FIRST if the matrix is a
+    # full kinectome (nodes are head_AP, head_ML, ...). Subgroups must then be
+    # built from this same (possibly expanded) list so the shuffle can locate
+    # each member in shuffled_markers.
+    if matrix1.shape != (len(marker_list), len(marker_list)):
         marker_list = expand_marker_list(marker_list)
+
+    # Define subgroups of body segments (marker labels) for shuffling.
+    # get_adaptive_subgroups matches by base marker name, so it groups the
+    # expanded labels correctly and returns them exactly as they appear here.
+    subgroups = get_adaptive_subgroups(matrix1, marker_list)
 
 
     # Convert avg_group1 (numpy array) into a DataFrame
@@ -248,7 +280,10 @@ def permutation_test_one_p(variability_scores, task_names, kinematics_list, mark
         raise ValueError("This function currently supports comparisons between exactly 2 groups")
     
     group1, group2 = group_names
-    
+
+    # Direction keys derived from the data: ['full'] or ['AP','ML','V'].
+    directions = _infer_directions(variability_scores)
+
     # # Get a sample subject from first group to extract task structure
     # sample_subject = next(iter(variability_scores[group1].values()))
     # tasks = sample_subject.keys()
@@ -258,7 +293,7 @@ def permutation_test_one_p(variability_scores, task_names, kinematics_list, mark
         for kinematic in kinematics_list:
             results[task][kinematic] = {}
             
-            for direction in ['AP', 'ML', 'V']:
+            for direction in directions:
                 # Collect matrices for each group
                 group1_matrices = []
                 group2_matrices = []
@@ -462,7 +497,10 @@ def bootstrap_permutation_test(variability_scores, task_names, kinematics_list, 
         raise ValueError("This function currently supports comparisons between exactly 2 groups")
     
     group1, group2 = group_names
-    
+
+    # Direction keys derived from the data: ['full'] or ['AP','ML','V'].
+    directions = _infer_directions(variability_scores)
+
     # Initialize results dictionaries
     bootstrap_results = {}
     observed_rhos = {}
@@ -477,7 +515,7 @@ def bootstrap_permutation_test(variability_scores, task_names, kinematics_list, 
             observed_rhos[task][kinematic] = {}
             bootstrap_results[task][kinematic] = {}
             
-            for direction in ['AP', 'ML', 'V']:
+            for direction in directions:
                 # Collect all available matrices for observed correlation
                 group1_matrices = []
                 group2_matrices = []
@@ -525,7 +563,7 @@ def bootstrap_permutation_test(variability_scores, task_names, kinematics_list, 
         
         for task in task_names:
             for kinematic in kinematics_list:
-                for direction in ['AP', 'ML', 'V']:
+                for direction in directions:
                     # Collect subject IDs that have data for this condition
                     group1_subjects = []
                     group2_subjects = []

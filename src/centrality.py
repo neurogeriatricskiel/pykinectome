@@ -9,6 +9,17 @@ from src.data_utils.statistics import analyze_centrality_statistics_by_community
 from src.graph_utils.graphs import all_graphs_for_subject
 
 
+def _infer_directions_from_centrality(group_centrality_data):
+    """Return the direction keys present in centrality data: ['full'] for full
+    kinectomes, ['AP','ML','V'] for directional ones. Falls back to directional."""
+    for group in group_centrality_data.values():
+        for sub_data in group.values():
+            for task_data in sub_data.values():
+                if task_data:
+                    return list(task_data.keys())
+    return ['AP', 'ML', 'V']
+
+
 def weighted_degree_centrality(G):
     """Calculates weighted degree centrality for each node in the graph."""
     ## TODO: note that this may not be the best parameter. as weight can be negative and even it out. 
@@ -67,7 +78,10 @@ def export_centrality_to_csv(group_centrality_data, save_path=None, matrix_mode=
 
     # Sort segments for consistent ordering
     all_segments = sorted(all_segments)
-   
+
+    # Direction keys from the data: ['full'] or ['AP','ML','V'].
+    directions = _infer_directions_from_centrality(group_centrality_data)
+
     rows = []
     
     # Iterate through each group and subject
@@ -78,7 +92,7 @@ def export_centrality_to_csv(group_centrality_data, save_path=None, matrix_mode=
             # For each segment, task, and direction combination
             for segment in all_segments:
                 for task_name, task_prefix in task_mapping.items():
-                    for direction in ['AP', 'ML', 'V']:
+                    for direction in directions:
                         col_name = f"{segment}_{task_prefix}_{direction}"
                        
                         # Get the value if it exists, otherwise NaN
@@ -100,7 +114,7 @@ def export_centrality_to_csv(group_centrality_data, save_path=None, matrix_mode=
     column_order = ['group', 'subject_id']
     for segment in all_segments:
         for task_prefix in ordered_prefixes:
-            for direction in ['AP', 'ML', 'V']:
+            for direction in directions:
                 column_order.append(f"{segment}_{task_prefix}_{direction}")
    
     df = df[column_order]
@@ -268,6 +282,10 @@ def centrality_main(diagnosis, kinematics_list, task_names, tracking_systems, ru
                             graphs = all_graphs_for_subject(kinectomes, current_markers, bound_value=None)
                             subject_average_weights = {}
 
+                            # Direction keys from the graphs themselves:
+                            # ['full'] for full kinectomes, ['AP','ML','V'] otherwise.
+                            directions = list(graphs.keys()) if graphs else []
+
                             # Precompute the per-direction std kinectome graph for mode B.
                             # (std across cycles of the raw kinectome, then one graph.)
                             std_graphs = None
@@ -278,7 +296,7 @@ def centrality_main(diagnosis, kinematics_list, task_names, tracking_systems, ru
                                 else:
                                     std_graphs = None
 
-                            for direction in ['AP', 'ML', 'V']:
+                            for direction in directions:
                                 if matrix_mode == 'centrality_of_std':
                                     # Mode B: centrality of the single std-kinectome graph.
                                     if not std_graphs or not std_graphs.get(direction):
@@ -316,7 +334,7 @@ def centrality_main(diagnosis, kinematics_list, task_names, tracking_systems, ru
                                 subject_average_weights[direction] = agg_weights
 
                             # Store individual subject data for each node
-                            for direction in ['AP', 'ML', 'V']:
+                            for direction in directions:
                                 if direction not in subject_average_weights:
                                     continue
                                 if direction not in group_centrality_data[group][sub_id][task_name]:

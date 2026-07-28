@@ -75,14 +75,21 @@ def all_graphs_for_subject(kinectomes, marker_list, bound_value):
     Returns
     -------
     dict[str, list[nx.Graph]]
-        Dictionary with keys ``'AP'``, ``'ML'``, ``'V'``, each containing a
-        list of graphs — one graph per gait cycle.
+        Dictionary keyed by direction — ``'AP'``, ``'ML'``, ``'V'`` for
+        directional kinectomes, or ``'full'`` for full kinectomes — each
+        containing a list of graphs, one graph per gait cycle.
     """
-    all_graphs = {"AP": [], "ML": [], "V": []}
+    if not kinectomes:
+        return {}
+
+    # A full kinectome (2D) yields one graph ('full'); a directional one (3D)
+    # yields three ('AP', 'ML', 'V'). Pick the key set from the first cycle.
+    n_graphs = len(build_graph(kinectomes[0], marker_list, bound_value))
+    keys = ['full'] if n_graphs == 1 else ['AP', 'ML', 'V']
+    all_graphs = {key: [] for key in keys}
 
     for kinectome in kinectomes:
         graphs = build_graph(kinectome, marker_list, bound_value)
-        keys = list(all_graphs.keys())
         for i, key in enumerate(keys):
             all_graphs[key].append(graphs[i])
 

@@ -162,7 +162,7 @@ def calculate_kinectome(data: pd.DataFrame, events: pd.DataFrame,
                         kinematics: str, base_path: str, result_base_path: str,
                         marker_list: list, full_kinectomes: bool,
                         correlation_method: str, linux: bool = False,
-                        interpol: bool = False):
+                        ):
     """Compute and save kinectome matrices for all gait cycles of one subject/task/run.
 
     Pearson, distance, or cross-correlation matrices are computed per gait cycle
@@ -219,40 +219,46 @@ def calculate_kinectome(data: pd.DataFrame, events: pd.DataFrame,
 
         gait_cycle_data = segment_data(data, cycle_indices)
 
-        if interpol:
-            # Assuming your data is in a DataFrame called 'df'
-            original_length = len(gait_cycle_data)
-            target_length = 500
+        # always interpolate the data before calculating kinectomes
+        # Assuming your data is in a DataFrame called 'df'
+        original_length = len(gait_cycle_data)
+        target_length = 500
 
-            # Create original and target time indices
-            original_indices = np.arange(original_length)
-            target_indices = np.linspace(0, original_length-1, target_length)
+        # Create original and target time indices
+        original_indices = np.arange(original_length)
+        target_indices = np.linspace(0, original_length-1, target_length)
 
-            # Interpolate each column
-            interpolated_data = {}
-            for column in gait_cycle_data.columns:
-                f = interpolate.interp1d(original_indices, gait_cycle_data[column], kind='linear')
-                interpolated_data[column] = f(target_indices)
+        # Interpolate each column
+        interpolated_data = {}
+        for column in gait_cycle_data.columns:
+            f = interpolate.interp1d(original_indices, gait_cycle_data[column], kind='linear')
+            interpolated_data[column] = f(target_indices)
 
-            # Create new DataFrame
-            gait_cycle_data = pd.DataFrame(interpolated_data)
+        # Create new DataFrame (once, after all columns are interpolated)
+        gait_cycle_data = pd.DataFrame(interpolated_data)
 
-        # Extract marker names
-        marker_names = sorted(set(col[:-6] for col in gait_cycle_data.columns if col.endswith(f'{kinematics.upper()}_x')))
+        # Extract marker names that have ALL THREE axis columns present.
+        # A marker is only usable if x, y and z all exist for this cycle.
+        K = kinematics.upper()
+        present_markers = [
+            m for m in marker_list
+            if all(f"{m}_{K}_{ax}" in gait_cycle_data.columns for ax in ("x", "y", "z"))
+        ]
 
-        # Check for missing markers
-        missing_markers = [m for m in marker_list if m not in marker_names]
+        # Guarantee whole-body kinectomes: if ANY requested marker is missing or
+        # incomplete, skip this cycle entirely rather than save a reduced matrix.
+        missing_markers = [m for m in marker_list if m not in present_markers]
         if missing_markers:
-            print(f"Missing markers for Subject: {sub_id}, Task: {task_name}, Missing: {missing_markers}")
+            print(f"  Missing/incomplete markers for sub-{sub_id}, task-{task_name}: "
+                  f"{missing_markers} — skipping this cycle to keep kinectomes full-size.")
             continue
 
-        # Reorder columns based on MARKER_LIST
+        # Reorder columns based on MARKER_LIST (all markers guaranteed present here).
         ordered_columns = []
         for marker in marker_list:
-            if marker in marker_names:
-                ordered_columns.extend([f"{marker}_{kinematics.upper()}_x", 
-                                        f"{marker}_{kinematics.upper()}_y", 
-                                        f"{marker}_{kinematics.upper()}_z"])
+            ordered_columns.extend([f"{marker}_{K}_x",
+                                    f"{marker}_{K}_y",
+                                    f"{marker}_{K}_z"])
 
         # Subset and reorder dataframe
         gait_cycle_data = gait_cycle_data[ordered_columns]
@@ -260,7 +266,7 @@ def calculate_kinectome(data: pd.DataFrame, events: pd.DataFrame,
         
         # compute correlations for all coordinates (x AND y AND z)        
         if full_kinectomes: 
-            num_markers = len(marker_names)       
+            num_markers = len(marker_list)
             all_markers = list(gait_cycle_data.columns)
             correlation_matrix_full = np.zeros((num_markers*3, num_markers*3))
             timelag_matrix_full = np.zeros((num_markers*3, num_markers*3))
@@ -276,12 +282,12 @@ def calculate_kinectome(data: pd.DataFrame, events: pd.DataFrame,
         
         else: # kinectomes for AP, ML and V directions separately
             # Initialize correlation matrices
-            num_markers = len(marker_names)
+            num_markers = len(marker_list)
             correlation_matrices = np.zeros((num_markers, num_markers, 3))
             timelag_matrices = np.zeros((num_markers, num_markers, 3))
             
             # Compute correlation for each coordinate (x, y, z)
-            for i, coord in enumerate([f'_{kinematics.upper()}_x', f'_{kinematics.upper()}_y', f'_{kinematics.upper()}_z']):
+            for i, coord in enumerate([f'_{K}_x', f'_{K}_y', f'_{K}_z']):
                 markers = [m + coord for m in marker_list]
                 if correlation_method == 'dcor':
                     correlation_matrices[:, :, i] = distance_correlation_matrix(gait_cycle_data[markers], markers)
@@ -324,7 +330,7 @@ def calculate_kinectome(data: pd.DataFrame, events: pd.DataFrame,
                     file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_cross.npy"
                     file_name_timeLag = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_time_lag.npy"
                 else:
-                    file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_pears{'_interpol' if interpol else ''}.npy"
+                    file_name = f"sub-{sub_id}_task-{task_name}_run-{run}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_pears.npy"
             else: 
                 if correlation_method == 'dcor':
                     file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_dcor.npy"
@@ -332,7 +338,7 @@ def calculate_kinectome(data: pd.DataFrame, events: pd.DataFrame,
                     file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_cross.npy"
                     file_name_timeLag = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_time_lag.npy"
                 else:
-                    file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_pears{'_interpol' if interpol else ''}.npy"
+                    file_name = f"sub-{sub_id}_task-{task_name}_tracksys-{tracksys}_{kinematics}_kinct{cycle_indices[0]+start_onset}-{cycle_indices[1]+start_onset}_pears.npy"
         
         file_path = os.path.join(kinectome_path, file_name)
         
@@ -365,7 +371,7 @@ def calculate_kinectome(data: pd.DataFrame, events: pd.DataFrame,
 
 
 def calculate_all_kinectomes(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, raw_data_path, fs, 
-                             base_path, marker_list, result_base_path, full, correlation_method, interpol) -> None:
+                             base_path, marker_list, result_base_path, full, correlation_method) -> None:
     """
     Calculates kinectomes for all subejcts. 
     This function iterates over a predefined list of subjects, tasks, tracking systems, and kinematic data types     
@@ -416,20 +422,31 @@ def calculate_all_kinectomes(diagnosis, kinematics_list, task_names, tracking_sy
                         if sub_id in pd_on:
                             run = 'on'
 
-                        # Skip if kinectomes already exist for this subject/task/run
+                        # Skip only if kinectomes of the SAME full-ness already exist.
+                        # Full kinectomes carry a "_full" suffix; direction-wise ones do not.
                         from config import KINECTOME_SAVE_PATH
                         local_dir = Path(KINECTOME_SAVE_PATH) / f"sub-{sub_id}"
                         run_token = run if run else ""
+
+                        def _matches(f):
+                            if not f.endswith(".npy"):
+                                return False
+                            if not (task_name in f and tracksys in f and kinematics in f
+                                    and correlation_method in f):
+                                return False
+                            # full-ness must match: "_full" present iff we want full
+                            is_full_file = "_full" in f
+                            if is_full_file != bool(full):
+                                return False
+                            if run_token:
+                                return run_token in f
+                            return not any(f"run-{r}" in f for r in ["on", "off"])
+
                         already_done = local_dir.exists() and any(
-                            task_name in f and tracksys in f and kinematics in f
-                            and correlation_method in f
-                            and (run_token in f if run_token else not any(
-                                f"run-{r}" in f for r in ["on", "off"]))
-                            for f in (p.name for p in local_dir.iterdir())
-                            if f.endswith(".npy")
+                            _matches(p.name) for p in local_dir.iterdir()
                         )
                         if already_done:
-                            print(f"  Skipping sub-{sub_id}, task-{task_name} — kinectomes already exist.")
+                            print(f"  Skipping sub-{sub_id}, task-{task_name} — {'full ' if full else ''}kinectomes already exist.")
                             continue
 
                         # Load raw data via the configured data loader
@@ -474,7 +491,7 @@ def calculate_all_kinectomes(diagnosis, kinematics_list, task_names, tracking_sy
                         calculate_kinectome(
                             preprocessed_data, events, sub_id, task_name, run, tracksys,
                             kinematics, base_path, result_base_path,
-                            marker_list, full, correlation_method, interpol
+                            marker_list, full, correlation_method
                         )
 
     return

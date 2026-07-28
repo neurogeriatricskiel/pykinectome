@@ -780,7 +780,20 @@ def plot_community_nodal_strength(df, consensus_communities, results, save_dir="
     os.makedirs(save_dir, exist_ok=True)
     
     speeds = ['pref', 'fast', 'slow']
-    directions = ['AP', 'ML', 'V']
+
+    # Derive direction token(s) from the DataFrame columns rather than assuming
+    # AP/ML/V. Columns are '{segment}_{speed}_{direction}'. 'full' for full
+    # kinectomes, AP/ML/V for directional.
+    _present_dirs = set()
+    for c in df.columns:
+        if c in ('group', 'subject_id'):
+            continue
+        parts = c.rsplit('_', 2)
+        if len(parts) == 3 and parts[1] in speeds:
+            _present_dirs.add(parts[2])
+    directions = [d for d in ['AP', 'ML', 'V', 'full'] if d in _present_dirs]
+    if not directions:
+        directions = ['AP', 'ML', 'V']
     groups = df['group'].unique()
 
     consensus_communities = [
@@ -788,6 +801,12 @@ def plot_community_nodal_strength(df, consensus_communities, results, save_dir="
         ['elbow_las', 'wrist_las', 'hand_las', 'thigh_mas', 'shank_mas', 'ankle_mas', 'toe_mas'],
         ['elbow_mas', 'wrist_mas', 'hand_mas', 'thigh_las', 'shank_las', 'ankle_las', 'toe_las']
     ] # make the consensus communities into a list so the order for subplots remains as indicated
+
+    def _base_of(seg):
+        for ax in ('_AP', '_ML', '_V'):
+            if seg.endswith(ax):
+                return seg[:-len(ax)]
+        return seg
     
     # Set up colors - different colors for each speed within each group
     # PD: red/yellow tones, Controls: blue/green tones
@@ -802,9 +821,25 @@ def plot_community_nodal_strength(df, consensus_communities, results, save_dir="
     y_range = fixed_y_max - fixed_y_min
     
     for community_idx, community in enumerate(consensus_communities):
-        community_segments = community 
-        
+        base_members = set(community)
+
         for direction in directions:
+            # Resolve actual segment node labels present for this community x
+            # direction: expanded labels (head_AP) for full, base names otherwise.
+            community_segments = []
+            for c in df.columns:
+                if c in ('group', 'subject_id'):
+                    continue
+                parts = c.rsplit('_', 2)
+                if len(parts) != 3 or parts[1] not in speeds or parts[2] != direction:
+                    continue
+                seg = parts[0]
+                if _base_of(seg) in base_members and seg not in community_segments:
+                    community_segments.append(seg)
+            community_segments = sorted(community_segments)
+            if not community_segments:
+                continue
+
             # Create figure with subplots for each segment in the community
             n_segments = len(community_segments)
             n_cols = min(3, n_segments)  # Max 3 columns
@@ -1081,19 +1116,34 @@ def plot_permutation_histogram(rhos, true_rho, perm_p, results_path, task, kinem
 def create_bootstrap_plots(bootstrap_results, observed_rhos, task_names, kinematics_list, matrix_type, result_base_path="results"):
     """Create one figure per task showing bootstrap distributions for avg and std kinectomes.
 
-    Each figure has 2 rows (avg, std) × 3 columns (AP, ML, V).
+    Each figure has 2 rows (avg, std) × N columns, where N is the number of
+    directions in the data: 3 (AP, ML, V) for directional kinectomes or 1
+    (full) for full kinectomes.
     """
     output_dir = Path(result_base_path) / "kinectome_characteristics" / "bootstrapping"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    directions = ['AP', 'ML', 'V']
     matrix_types = ['avg', 'std']
     row_labels = {'avg': 'Average kinectome', 'std': 'Std kinectome'}
     row_colors = {'avg': 'skyblue', 'std': 'lightgreen'}
 
+    def _infer_directions(bt_root):
+        """Find the direction keys present under [matrix_type?][task][kinematic]."""
+        for mt in matrix_types:
+            bt = bt_root.get(mt, bt_root)
+            for task in task_names:
+                if task in bt:
+                    for kinematic in kinematics_list:
+                        if kinematic in bt[task] and bt[task][kinematic]:
+                            return list(bt[task][kinematic].keys())
+        return ['AP', 'ML', 'V']
+
+    directions = _infer_directions(bootstrap_results)
+    n_cols = len(directions)
+
     for kinematic in kinematics_list:
         for task in task_names:
-            fig, axes = plt.subplots(2, 3, figsize=(15, 8), squeeze=False)
+            fig, axes = plt.subplots(2, n_cols, figsize=(5 * n_cols, 8), squeeze=False)
             task_label = task.replace('walk', '')
             fig.suptitle(f'Bootstrap Distributions — {task_label} ({kinematic})', fontsize=14)
 
@@ -1145,11 +1195,24 @@ def create_sample_size_plots(sample_size_results, observed_rhos, task_names, kin
     output_dir = Path(result_base_path) / "kinectome_characteristics" / "bootstrapping" / "sample_size_analysis"
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    directions = ['AP', 'ML', 'V']
+    # Derive directions from the data: 'full' for full kinectomes, AP/ML/V otherwise.
+    directions = None
+    for _task in task_names:
+        if _task in observed_rhos:
+            for _kin in kinematics_list:
+                if _kin in observed_rhos[_task] and observed_rhos[_task][_kin]:
+                    directions = list(observed_rhos[_task][_kin].keys())
+                    break
+        if directions:
+            break
+    if not directions:
+        directions = ['AP', 'ML', 'V']
+    n_dir = len(directions)
     
     for kinematic in kinematics_list:
-        # Plot 1: Mean and variability vs sample size (3x3 subplots)
-        fig1, axes1 = plt.subplots(3, 3, figsize=(18, 12))
+        # Plot 1: Mean and variability vs sample size (n_task x n_dir subplots)
+        fig1, axes1 = plt.subplots(len(task_names), n_dir,
+                                   figsize=(6 * n_dir, 4 * len(task_names)), squeeze=False)
         fig1.suptitle(f'Correlation Stability vs Sample Size - {kinematic} ({matrix_type})', fontsize=16)
         
         for i, task in enumerate(task_names):
@@ -1205,7 +1268,7 @@ def create_sample_size_plots(sample_size_results, observed_rhos, task_names, kin
         plt.show()
         
         # Plot 2: Coefficient of variation (CV) vs sample size
-        fig2, axes2 = plt.subplots(3, 3, figsize=(18, 12))
+        fig2, axes2 = plt.subplots(len(task_names), n_dir, figsize=(6 * n_dir, 4 * len(task_names)), squeeze=False)
         fig2.suptitle(f'Coefficient of Variation vs Sample Size - {kinematic} ({matrix_type})', fontsize=16)
         
         for i, task in enumerate(task_names):
@@ -1254,7 +1317,7 @@ def create_sample_size_plots(sample_size_results, observed_rhos, task_names, kin
         
         # Plot 3: Distribution comparison at key sample sizes (10%, 50%, 90%)
         key_fractions = [0.1, 0.5, 0.9]
-        fig3, axes3 = plt.subplots(3, 3, figsize=(18, 12))
+        fig3, axes3 = plt.subplots(len(task_names), n_dir, figsize=(6 * n_dir, 4 * len(task_names)), squeeze=False)
         fig3.suptitle(f'Bootstrap Distributions at Key Sample Sizes - {kinematic} ({matrix_type})', fontsize=16)
         
         colors = ['lightcoral', 'skyblue', 'lightgreen']
@@ -1334,7 +1397,20 @@ def plot_community_nodal_strength_single_task(df, consensus_communities, task_pr
 
     os.makedirs(save_dir, exist_ok=True)
 
-    directions = ['AP', 'ML', 'V']
+    # Derive the direction token(s) actually present in the DataFrame for this
+    # task, instead of assuming AP/ML/V. Columns are '{segment}_{task}_{dir}'.
+    # For full kinectomes the only token is 'full'; for directional it is AP/ML/V.
+    present_dirs = set()
+    for c in df.columns:
+        if c in ('group', 'subject_id'):
+            continue
+        parts = c.rsplit('_', 2)
+        if len(parts) == 3 and parts[1] == task_prefix:
+            present_dirs.add(parts[2])
+    directions = [d for d in ['AP', 'ML', 'V', 'full'] if d in present_dirs]
+    if not directions:
+        directions = ['AP', 'ML', 'V']
+
     groups = list(group_order) if group_order is not None else list(df['group'].unique())
 
     def sig_symbol(p):
@@ -1351,10 +1427,35 @@ def plot_community_nodal_strength_single_task(df, consensus_communities, task_pr
     # Per-group colours (fall back to gray)
     group_colors = {'Parkinson': '#FF6B6B', 'Control': '#4ECDC4'}
 
+    def _base_of(seg):
+        """Strip a trailing direction axis suffix (_AP/_ML/_V) from a segment
+        node label, so expanded full labels (head_AP) map to base names (head)."""
+        for ax in ('_AP', '_ML', '_V'):
+            if seg.endswith(ax):
+                return seg[:-len(ax)]
+        return seg
+
     for community_idx, community in enumerate(consensus_communities):
-        community_segments = sorted(community) if isinstance(community, (set, frozenset)) else list(community)
+        base_members = set(community) if isinstance(community, (set, frozenset)) else set(community)
 
         for direction in directions:
+            # Resolve the actual segment columns for this community x direction.
+            # Column format is '{segment}_{task}_{direction}'. For full kinectomes
+            # the segment is an expanded node label (head_AP); we keep those whose
+            # base name is in this community. For directional the segment is a base
+            # name and maps directly.
+            community_segments = []
+            suffix = f"_{task_prefix}_{direction}"
+            for c in df.columns:
+                if not c.endswith(suffix):
+                    continue
+                segment = c[: -len(suffix)]
+                if _base_of(segment) in base_members:
+                    community_segments.append(segment)
+            community_segments = sorted(community_segments)
+            if not community_segments:
+                continue
+
             # --- Between-group stats for this community x direction ---
             # Collect p-values per segment, then FDR-correct across segments.
             seg_pvals = {}

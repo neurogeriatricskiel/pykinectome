@@ -25,6 +25,76 @@ from src.graph_utils.graphs import build_graph, jaccard_complete_communities
 from config import KINECTOME_SAVE_PATH
 
 
+# ── Helpers for full vs directional kinectome support ────────────────────────
+_DIRS3 = ['AP', 'ML', 'V']
+
+
+def _direction_labels_for_graphs(graphs):
+    """Return the direction key for each graph produced by build_graph:
+    ['full'] when there is a single (full) graph, ['AP','ML','V'] otherwise."""
+    return ['full'] if len(graphs) == 1 else list(_DIRS3)
+
+
+def _expand_markers(marker_list):
+    """Expand base marker names to per-direction labels (head -> head_AP/ML/V)."""
+    return [f"{m}_{d}" for m in marker_list for d in _DIRS3]
+
+
+def _exclude_markers_full_aware(matrix, marker_list, exclude, full):
+    """Marker exclusion that works for both directional and full kinectomes.
+
+    For full kinectomes the matrix is (n*3)x(n*3) with per-direction rows/cols,
+    so both the label list and the exclude list are expanded to per-direction
+    labels before slicing. Returns (reduced_matrix, reduced_label_list) where
+    the label list is expanded (length n*3) for full and base (length n) for
+    directional — matching the matrix dimension either way.
+    """
+    from src.data_utils.data_loader import exclude_markers_from_kinectome
+    if full:
+        labels = _expand_markers(marker_list)
+        excl = [f"{m}_{d}" for m in exclude for d in _DIRS3]
+        return exclude_markers_from_kinectome(matrix, labels, excl)
+    return exclude_markers_from_kinectome(matrix, marker_list, exclude)
+
+
+def _consensus_for_graph(consensus_communities, full):
+    """Return consensus communities whose node labels match the graph nodes:
+    expanded per-direction labels for full kinectomes, base names otherwise.
+    Each input community is a set of base marker names."""
+    if not full:
+        return consensus_communities
+    return [
+        {f"{m}_{d}" for m in community for d in _DIRS3}
+        for community in consensus_communities
+    ]
+
+
+def _reduce_and_build_graphs(matrix, marker_list, exclude, full):
+    """Apply marker exclusion (if any) and build graphs, handling full and
+    directional kinectomes uniformly.
+
+    Returns (graphs, base_marker_list, node_label_list) where:
+      - graphs is the list from build_graph (1 for full, 3 for directional),
+      - base_marker_list is the reduced BASE marker list (what build_graph was
+        given; length n),
+      - node_label_list is the list of actual graph-node labels: expanded
+        per-direction labels (length n*3) for full, base names (length n) for
+        directional. Use node_label_list to map community indices back to names.
+    """
+    # Reduced base marker list (used as build_graph input; it expands internally
+    # for a 2D full matrix, and labels nodes directly for directional slices).
+    base_markers = [m for m in marker_list if m not in exclude] if exclude else list(marker_list)
+
+    if exclude:
+        reduced_matrix, _ = _exclude_markers_full_aware(matrix, marker_list, exclude, full)
+    else:
+        reduced_matrix = matrix
+
+    graphs = build_graph(reduced_matrix, base_markers)
+    node_labels = _expand_markers(base_markers) if full else base_markers
+    return graphs, base_markers, node_labels
+
+
 def run_louvain(G, clustering_method, num_iterations=100, resolution=1.0):
     """Runs Louvain community detection multiple times and returns all partitions."""
     partitions= []
@@ -64,30 +134,40 @@ def all_allegiance_matrices_for_subject(kinectomes, marker_list, clustering_meth
     note:
         it is not computed per group, so all allegiance matrices (from one subject per trial and per direction) are put into all_allegiance_matrices dict
     """
-    all_allegiance_matrices = {"AP": [], "ML": [], "V": []}
-   
+    from config import LOUVAIN_ITERATIONS
+
+    # Determine direction keys from the first kinectome's graph count so the
+    # dict only ever contains keys that will actually be populated:
+    # 'full' for full (2D) kinectomes, 'AP'/'ML'/'V' for directional (3D) ones.
+    if not kinectomes:
+        return {}
+    n_graphs = len(build_graph(kinectomes[0], marker_list))
+    if n_graphs == 1:
+        all_allegiance_matrices = {"full": []}
+    else:
+        all_allegiance_matrices = {"AP": [], "ML": [], "V": []}
+
     for kinectome in kinectomes:
         graphs = build_graph(kinectome, marker_list)
-        
-        from config import LOUVAIN_ITERATIONS
+
         if len(graphs) == 1:
-            # If only one (full) graph, assign it to AP direction (idx 0)
+            # Single (full) graph: nodes are the expanded per-direction labels.
             G = graphs[0]
             partitions = run_louvain(G, clustering_method, num_iterations=LOUVAIN_ITERATIONS, resolution=resolution)
             marker_list_exp = permutation.expand_marker_list(marker_list)
             allegiance_matrix = compute_allegiance_matrix(partitions, marker_list_exp, num_nodes=G.number_of_nodes())
-            all_allegiance_matrices["AP"].append(np.array(allegiance_matrix))
+            all_allegiance_matrices["full"].append(np.array(allegiance_matrix))
         else:
-            # If multiple graphs (3 directions), process each one
+            # Multiple graphs (3 directions): process each one
             for idx, direction in enumerate(["AP", "ML", "V"]):
                 G = graphs[idx]
                 partitions = run_louvain(G, clustering_method, num_iterations=LOUVAIN_ITERATIONS, resolution=resolution)
                 allegiance_matrix = compute_allegiance_matrix(partitions, marker_list, num_nodes=G.number_of_nodes())
                 all_allegiance_matrices[direction].append(np.array(allegiance_matrix))
-           
+
         # Visualize one of the graphs (for debugging purposes)
         # draw_graph_with_weights(G)
-   
+
     return all_allegiance_matrices
 
 #used
@@ -99,26 +179,30 @@ def modularity_analysis(diagnosis, kinematics_list, task_names, tracking_systems
     matched_control_sub_ids = task_control_ids.get(task_names[0], [])
 
 
+    # Direction keys depend on kinectome type: 'full' for full kinectomes,
+    # AP/ML/V for directional. Initialise the per-direction slots accordingly.
+    _dir_init = {"full": None} if full else {"AP": None, "ML": None, "V": None}
+
     # Store variability scores structured per subject, task, and direction
     all_avg_allegiance = {
-        f"{diagnosis[0][10:].capitalize()}": {sub_id: {task: {kinematics: {"AP": None, "ML": None, "V": None} 
+        f"{diagnosis[0][10:].capitalize()}": {sub_id: {task: {kinematics: dict(_dir_init)
                                                               for kinematics in kinematics_list} 
                                                               for task in task_names} 
                                                               for sub_id in disease_sub_ids},
 
-        "Control": {sub_id: {task: {kinematics: {"AP": None, "ML": None, "V": None} 
+        "Control": {sub_id: {task: {kinematics: dict(_dir_init)
                                     for kinematics in kinematics_list}
                                     for task in task_names} 
                                     for sub_id in matched_control_sub_ids},
     }
 
     all_std_allegiance = {
-        f"{diagnosis[0][10:].capitalize()}": {sub_id: {task: {kinematics: {"AP": None, "ML": None, "V": None} 
+        f"{diagnosis[0][10:].capitalize()}": {sub_id: {task: {kinematics: dict(_dir_init)
                                                               for kinematics in kinematics_list} 
                                                               for task in task_names} 
                                                               for sub_id in disease_sub_ids},
 
-        "Control": {sub_id: {task: {kinematics: {"AP": None, "ML": None, "V": None} 
+        "Control": {sub_id: {task: {kinematics: dict(_dir_init)
                                     for kinematics in kinematics_list}
                                     for task in task_names} 
                                     for sub_id in matched_control_sub_ids},
@@ -154,18 +238,19 @@ def modularity_analysis(diagnosis, kinematics_list, task_names, tracking_systems
                             continue
 
                         # Strip excluded markers (e.g. upper limb for dual tasks) BEFORE
-                        # community detection, so they never influence the allegiance matrices
+                        # community detection, so they never influence the allegiance matrices.
+                        # For full kinectomes the matrix is reduced in the expanded label
+                        # space, but all_allegiance_matrices_for_subject/build_graph expects
+                        # the reduced BASE marker list (it expands internally for 2D full
+                        # matrices), so we track the base list separately.
                         exclude = EXCLUDE_MARKERS_BY_TASK.get(task_name, [])
-                        effective_marker_list = marker_list
+                        effective_marker_list = [m for m in marker_list if m not in exclude] if exclude else marker_list
                         if exclude:
-                            from src.data_utils.data_loader import exclude_markers_from_kinectome
                             reduced_kinectomes = []
-                            current_markers = marker_list
                             for k in kinectomes:
-                                k_reduced, current_markers = exclude_markers_from_kinectome(k, current_markers, exclude)
+                                k_reduced, _ = _exclude_markers_full_aware(k, marker_list, exclude, full)
                                 reduced_kinectomes.append(k_reduced)
                             kinectomes = reduced_kinectomes
-                            effective_marker_list = current_markers
 
                         allegiance_matrices = all_allegiance_matrices_for_subject(kinectomes, effective_marker_list, clustering_method, resolution)
                         
@@ -302,15 +387,15 @@ def calculate_avg_allg_mtrx(avg_allegiance_matrices, full):
                 group_avg_matrices[group][task][kinematic] = {}
                 
                 if full:
-                    # Handle 66x66 matrices - check if AP key has a 66x66 matrix
+                    # Handle full (e.g. 66x66) matrices — stored under the 'full' key
                     valid_matrices = []
                     
                     for participant_id, participant_data in participants.items():
                         if (task in participant_data and
                             kinematic in participant_data[task] and
-                            'AP' in participant_data[task][kinematic]):
+                            'full' in participant_data[task][kinematic]):
                             
-                            matrix = participant_data[task][kinematic]['AP']
+                            matrix = participant_data[task][kinematic]['full']
                             
                             # Check if matrix is valid (square, non-empty)
                             if (matrix is not None and 
@@ -794,22 +879,26 @@ def calculate_modularity(diagnosis, kinematics_list, task_names, tracking_system
     disease_sub_ids        = task_disease_ids.get(task_names[0], [])
     matched_control_sub_ids = task_control_ids.get(task_names[0], [])
 
+    # Direction keys depend on kinectome type.
+    _dir_init = {"full": None} if full else {"AP": None, "ML": None, "V": None}
+    _dir_init_list = {"full": []} if full else {"AP": [], "ML": [], "V": []}
+
     # Store variability scores structured per subject, task, and direction
     modularity_scores = {
-        f"{diagnosis[0][10:].capitalize()}": {sub_id: {task: {kinematics: {"AP": None, "ML": None, "V": None} 
+        f"{diagnosis[0][10:].capitalize()}": {sub_id: {task: {kinematics: dict(_dir_init)
                                                               for kinematics in kinematics_list} 
                                                               for task in task_names} 
                                                               for sub_id in disease_sub_ids},
 
-        "Control": {sub_id: {task: {kinematics: {"AP": None, "ML": None, "V": None} 
+        "Control": {sub_id: {task: {kinematics: dict(_dir_init)
                                     for kinematics in kinematics_list}
                                     for task in task_names} 
                                     for sub_id in matched_control_sub_ids},
     }
 
     weight_distributions = {
-        f"{diagnosis[0][10:].capitalize()}": {task: {"AP": [], "ML": [], "V": []} for task in task_names},
-        "Control": {task: {"AP": [], "ML": [], "V": []} for task in task_names},
+        f"{diagnosis[0][10:].capitalize()}": {task: dict(_dir_init_list) for task in task_names},
+        "Control": {task: dict(_dir_init_list) for task in task_names},
     }
 
 
@@ -847,28 +936,25 @@ def calculate_modularity(diagnosis, kinematics_list, task_names, tracking_system
                         # average (between gait cycles) kinectomes in each movement direction
                         avg_kinectomes = np.mean(kinectomes, axis=0)
 
-                        # Apply marker exclusion for dual tasks
+                        # Apply marker exclusion + build graphs (full/directional uniform)
                         from config import EXCLUDE_MARKERS_BY_TASK
-                        from src.data_utils.data_loader import exclude_markers_from_kinectome
                         exclude = EXCLUDE_MARKERS_BY_TASK.get(task_name, [])
-                        effective_marker_list = marker_list
-                        if exclude:
-                            avg_kinectomes, effective_marker_list = exclude_markers_from_kinectome(
-                                avg_kinectomes, marker_list, exclude
-                            )
+                        graphs, effective_marker_list, _node_labels = _reduce_and_build_graphs(
+                            avg_kinectomes, marker_list, exclude, full
+                        )
 
-                        # make graphs from the kinectomes (returns a list of three graph objects for AP, ML, and V directions)
-                        graphs = build_graph(avg_kinectomes, effective_marker_list)  # include all edges (no threshold)
+                        # consensus communities relabelled to match graph nodes
+                        graph_consensus = _consensus_for_graph(consensus_communities, full)
 
                         # calculate modularity for each subject (per direction)
                         modularity_per_subject = []
 
                         for G in graphs:
-                            modularity_per_dir = nx.community.modularity(G, consensus_communities, weight = 'weight', resolution = resolution)
+                            modularity_per_dir = nx.community.modularity(G, graph_consensus, weight = 'weight', resolution = resolution)
                             modularity_per_subject.append(np.round(modularity_per_dir, 2))
 
                         # Store modularity scores in the main dictionary
-                        directions = ["AP", "ML", "V"]
+                        directions = _direction_labels_for_graphs(graphs)
                         for i, direction in enumerate(directions):
                             modularity_scores[group][sub_id][task_name][kinematics][direction] = modularity_per_subject[i]
 
@@ -1219,14 +1305,17 @@ def calc_modularity_per_subject(subject_communities, marker_list, diagnosis, kin
     disease_sub_ids        = task_disease_ids.get(task_names[0], [])
     matched_control_sub_ids = task_control_ids.get(task_names[0], [])
 
+    # Direction keys depend on kinectome type.
+    _dir_init = {"full": None} if full else {"AP": None, "ML": None, "V": None}
+
     # Store variability scores structured per subject, task, and direction
     modularity_subject_scores = {
-        f"{diagnosis[0][10:].capitalize()}": {sub_id: {task: {kinematics: {"AP": None, "ML": None, "V": None} 
+        f"{diagnosis[0][10:].capitalize()}": {sub_id: {task: {kinematics: dict(_dir_init)
                                                               for kinematics in kinematics_list} 
                                                               for task in task_names} 
                                                               for sub_id in disease_sub_ids},
 
-        "Control": {sub_id: {task: {kinematics: {"AP": None, "ML": None, "V": None} 
+        "Control": {sub_id: {task: {kinematics: dict(_dir_init)
                                     for kinematics in kinematics_list}
                                     for task in task_names} 
                                     for sub_id in matched_control_sub_ids},
@@ -1268,27 +1357,21 @@ def calc_modularity_per_subject(subject_communities, marker_list, diagnosis, kin
                         # average (between gait cycles) kinectomes in each movement direction
                         avg_kinectomes = np.mean(kinectomes, axis=0)
 
-                        # Strip excluded markers so the graph matches the (already-reduced)
-                        # community structure computed for this task
+                        # Strip excluded markers + build graphs (full/directional uniform).
+                        # node_labels are the actual graph-node names, used to map the
+                        # Louvain community indices back to node names.
                         from config import EXCLUDE_MARKERS_BY_TASK
                         exclude = EXCLUDE_MARKERS_BY_TASK.get(task_name, [])
-                        effective_marker_list = marker_list
-                        if exclude:
-                            from src.data_utils.data_loader import exclude_markers_from_kinectome
-                            avg_kinectomes, effective_marker_list = exclude_markers_from_kinectome(
-                                avg_kinectomes, marker_list, exclude
-                            )
-
-                        # make graphs from the kinectomes (returns a list of three graph objects for AP, ML, and V directions)
-                        graphs = build_graph(avg_kinectomes, effective_marker_list) # bound_value = 0.4 - 25%, ~0.95 - median, 1.25 - 75%
-
+                        graphs, effective_marker_list, node_labels = _reduce_and_build_graphs(
+                            avg_kinectomes, marker_list, exclude, full
+                        )
 
                         for i, direction in enumerate(subject_communities[group][sub_id][task_name][kinematics].keys()):
                                 G = graphs[i]
                                 subject_community_structure = subject_communities[group][sub_id][task_name][kinematics][direction]
                                 
-                                # subject's community structure with marker names
-                                mapped_structure = [{effective_marker_list[i] for i in community} for community in subject_community_structure]
+                                # subject's community structure with node names
+                                mapped_structure = [{node_labels[idx] for idx in community} for community in subject_community_structure]
 
                                 subject_modularity = np.round(nx.community.modularity(G, mapped_structure, weight='weight', resolution=resolution), 2)
                                 modularity_subject_scores[group][sub_id][task_name][kinematics][direction] = subject_modularity
@@ -1320,14 +1403,32 @@ def plot_modularity_vs_resolution(q_by_resolution, task_names, kinematics_list, 
         return
 
     groups = list(q_by_resolution[resolutions[0]].keys())
-    directions = ["AP", "ML", "V"]
+
+    # Derive directions from the data: 'full' for full kinectomes, AP/ML/V otherwise.
+    directions = None
+    for _res in resolutions:
+        for _grp in q_by_resolution[_res].values():
+            for _sub in _grp.values():
+                for _taskd in _sub.values():
+                    for _kind in _taskd.values():
+                        if isinstance(_kind, dict) and _kind:
+                            directions = list(_kind.keys())
+                            break
+                    if directions: break
+                if directions: break
+            if directions: break
+        if directions: break
+    if not directions:
+        directions = ["AP", "ML", "V"]
+    n_dir = len(directions)
 
     result_folder = Path(result_base_path) / "modularity"
     result_folder.mkdir(parents=True, exist_ok=True)
 
     for task in task_names:
         for kinematics in kinematics_list:
-            fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+            fig, axes = plt.subplots(1, n_dir, figsize=(6 * n_dir, 5), squeeze=False)
+            axes = axes[0]
             any_data = False
 
             for ax, direction in zip(axes, directions):
@@ -1493,6 +1594,9 @@ def calculate_community_strength_metrics(diagnosis, kinematics_list, task_names,
     matched_control_sub_ids = task_control_ids.get(task_names[0], [])
 
 
+    # Direction keys depend on kinectome type.
+    _dir_init = {"full": None} if full else {"AP": None, "ML": None, "V": None}
+
     # Initialize dictionaries for the two key metrics
     metrics = {
         'between_community_ratio': {},
@@ -1502,12 +1606,12 @@ def calculate_community_strength_metrics(diagnosis, kinematics_list, task_names,
     # Initialize structure for each metric
     for metric_name in metrics.keys():
         metrics[metric_name] = {
-            f"{diagnosis[0][10:].capitalize()}": {sub_id: {task: {kinematics: {"AP": None, "ML": None, "V": None} 
+            f"{diagnosis[0][10:].capitalize()}": {sub_id: {task: {kinematics: dict(_dir_init)
                                                                   for kinematics in kinematics_list} 
                                                                   for task in task_names} 
                                                                   for sub_id in disease_sub_ids},
 
-            "Control": {sub_id: {task: {kinematics: {"AP": None, "ML": None, "V": None} 
+            "Control": {sub_id: {task: {kinematics: dict(_dir_init)
                                         for kinematics in kinematics_list}
                                         for task in task_names} 
                                         for sub_id in matched_control_sub_ids},
@@ -1515,11 +1619,11 @@ def calculate_community_strength_metrics(diagnosis, kinematics_list, task_names,
 
     # Add intra-community strength as a bonus metric
     metrics['intra_community_strength'] = {
-        f"{diagnosis[0][10:].capitalize()}": {sub_id: {task: {kinematics: {"AP": None, "ML": None, "V": None} 
+        f"{diagnosis[0][10:].capitalize()}": {sub_id: {task: {kinematics: dict(_dir_init)
                                                               for kinematics in kinematics_list} 
                                                               for task in task_names} 
                                                               for sub_id in disease_sub_ids},
-        "Control": {sub_id: {task: {kinematics: {"AP": None, "ML": None, "V": None} 
+        "Control": {sub_id: {task: {kinematics: dict(_dir_init)
                                     for kinematics in kinematics_list}
                                     for task in task_names} 
                                     for sub_id in matched_control_sub_ids},
@@ -1553,28 +1657,24 @@ def calculate_community_strength_metrics(diagnosis, kinematics_list, task_names,
                         # Average kinectomes across gait cycles
                         avg_kinectomes = np.mean(kinectomes, axis=0)
 
-                        # Strip excluded markers (e.g. upper limb for dual tasks) before
-                        # building the graph, so they never enter the strength calculation
+                        # Strip excluded markers + build graphs (full/directional uniform)
                         exclude = EXCLUDE_MARKERS_BY_TASK.get(task_name, [])
-                        effective_marker_list = marker_list
-                        if exclude:
-                            from src.data_utils.data_loader import exclude_markers_from_kinectome
-                            avg_kinectomes, effective_marker_list = exclude_markers_from_kinectome(
-                                avg_kinectomes, marker_list, exclude
-                            )
+                        graphs, effective_marker_list, _node_labels = _reduce_and_build_graphs(
+                            avg_kinectomes, marker_list, exclude, full
+                        )
 
-                        # Build graphs
-                        graphs = build_graph(avg_kinectomes, effective_marker_list)
+                        # consensus communities relabelled to match graph nodes
+                        graph_consensus = _consensus_for_graph(consensus_communities, full)
 
                         # Calculate metrics for each direction
-                        directions = ["AP", "ML", "V"]
+                        directions = _direction_labels_for_graphs(graphs)
                         for i, direction in enumerate(directions):
                             G = graphs[i]
                             
                             # Calculate the three key metrics
-                            between_ratio = calculate_between_community_ratio(G, consensus_communities)
-                            cross_coupling = calculate_cross_community_coupling(G, consensus_communities)
-                            intra_strength = calculate_intra_community_strength_per_community(G, consensus_communities)
+                            between_ratio = calculate_between_community_ratio(G, graph_consensus)
+                            cross_coupling = calculate_cross_community_coupling(G, graph_consensus)
+                            intra_strength = calculate_intra_community_strength_per_community(G, graph_consensus)
                             
                             # Store results
                             metrics['between_community_ratio'][group][sub_id][task_name][kinematics][direction] = np.round(between_ratio, 4)
@@ -1692,7 +1792,7 @@ def calculate_community_strength_metrics_own(diagnosis, kinematics_list, task_na
         for kinematics in kinematics_list:
             aligned_group_communities["Control"][task][kinematics] = {}
             aligned_group_communities[disease_group_label][task][kinematics] = {}
-            for direction in ["AP", "ML", "V"]:
+            for direction in (['full'] if full else ["AP", "ML", "V"]):
                 control_comms = group_communities.get("Control", {}).get(task, {}).get(kinematics, {}).get(direction)
                 disease_comms = group_communities.get(disease_group_label, {}).get(task, {}).get(kinematics, {}).get(direction)
                 if not control_comms or not disease_comms:
@@ -1718,6 +1818,7 @@ def calculate_community_strength_metrics_own(diagnosis, kinematics_list, task_na
                 # create_community_strength_plot groups its subplots
                 community_sizes[task][direction] = [(len(r), len(d)) for r, d in zip(kept_ref, kept_dis)]
 
+    _dir_init = {"full": None} if full else {"AP": None, "ML": None, "V": None}
     metrics = {
         'between_community_ratio': {},
         'cross_community_coupling': {},
@@ -1725,11 +1826,11 @@ def calculate_community_strength_metrics_own(diagnosis, kinematics_list, task_na
     }
     for metric_name in metrics.keys():
         metrics[metric_name] = {
-            f"{diagnosis[0][10:].capitalize()}": {sub_id: {task: {kinematics: {"AP": None, "ML": None, "V": None}
+            f"{diagnosis[0][10:].capitalize()}": {sub_id: {task: {kinematics: dict(_dir_init)
                                                                   for kinematics in kinematics_list}
                                                                   for task in task_names}
                                                                   for sub_id in disease_sub_ids},
-            "Control": {sub_id: {task: {kinematics: {"AP": None, "ML": None, "V": None}
+            "Control": {sub_id: {task: {kinematics: dict(_dir_init)
                                         for kinematics in kinematics_list}
                                         for task in task_names}
                                         for sub_id in matched_control_sub_ids},
@@ -1762,30 +1863,23 @@ def calculate_community_strength_metrics_own(diagnosis, kinematics_list, task_na
                         # Average kinectomes across gait cycles
                         avg_kinectomes = np.mean(kinectomes, axis=0)
 
-                        # Strip excluded markers (e.g. upper limb for dual tasks) before
-                        # building the graph, so they never enter the strength calculation
+                        # Strip excluded markers + build graphs (full/directional uniform)
                         exclude = EXCLUDE_MARKERS_BY_TASK.get(task_name, [])
-                        effective_marker_list = marker_list
-                        if exclude:
-                            from src.data_utils.data_loader import exclude_markers_from_kinectome
-                            avg_kinectomes, effective_marker_list = exclude_markers_from_kinectome(
-                                avg_kinectomes, marker_list, exclude
-                            )
-
-                        # Build graphs
-                        graphs = build_graph(avg_kinectomes, effective_marker_list)
+                        graphs, effective_marker_list, node_labels = _reduce_and_build_graphs(
+                            avg_kinectomes, marker_list, exclude, full
+                        )
 
                         # Calculate metrics for each direction, using THIS subject's
                         # own group's Louvain-detected community structure (indices
-                        # into effective_marker_list -> mapped to marker names)
-                        directions = ["AP", "ML", "V"]
+                        # into node_labels -> mapped to node names)
+                        directions = _direction_labels_for_graphs(graphs)
                         for i, direction in enumerate(directions):
                             G = graphs[i]
 
                             own_structure = aligned_group_communities.get(group, {}).get(task_name, {}).get(kinematics, {}).get(direction)
                             if not own_structure:
                                 continue
-                            own_communities = [{effective_marker_list[idx] for idx in community} for community in own_structure]
+                            own_communities = [{node_labels[idx] for idx in community} for community in own_structure]
 
                             between_ratio = calculate_between_community_ratio(G, own_communities)
                             cross_coupling = calculate_cross_community_coupling(G, own_communities)
@@ -2012,7 +2106,7 @@ def create_community_strength_plot(df, stats_results, resolution, save_path=None
     
     # Get unique values
     tasks = sorted(df['task'].unique())
-    directions = ['AP', 'ML', 'V']  # Fixed order
+    directions = ['full', 'AP', 'ML', 'V']  # Fixed order (full for full kinectomes)
     groups = sorted(df['group'].unique())
     
     # Filter directions that exist in data
@@ -2024,14 +2118,10 @@ def create_community_strength_plot(df, stats_results, resolution, save_path=None
     
     # Create figure
     fig, axes = plt.subplots(len(tasks), len(existing_directions), 
-                            figsize=(5 * len(existing_directions), 4 * len(tasks)))
-    
-    if len(tasks) == 1:
-        axes = axes.reshape(1, -1)
-    if len(existing_directions) == 1:
-        axes = axes.reshape(-1, 1)
-    if len(tasks) == 1 and len(existing_directions) == 1:
-        axes = np.array([[axes]])
+                            figsize=(5 * len(existing_directions), 4 * len(tasks)),
+                            squeeze=False)
+    # squeeze=False guarantees axes is always a 2D array (handles single
+    # task/direction, e.g. the single 'full' direction case).
     
     # Color scheme
     group_colors = {'Parkinson': '#E74C3C', 'Control': '#3498DB'}
@@ -2525,7 +2615,7 @@ def create_pairwise_community_plot(df, stats_results, resolution, metric_type='s
     
     # Get unique values
     tasks = sorted(df['task'].unique())
-    directions = ['AP', 'ML', 'V']
+    directions = ['full', 'AP', 'ML', 'V']
     groups = sorted(df['group'].unique())
     
     # Filter directions that exist in data
@@ -2537,14 +2627,10 @@ def create_pairwise_community_plot(df, stats_results, resolution, metric_type='s
     
     # Create figure
     fig, axes = plt.subplots(len(tasks), len(existing_directions), 
-                            figsize=(5 * len(existing_directions), 4 * len(tasks)))
-    
-    if len(tasks) == 1:
-        axes = axes.reshape(1, -1)
-    if len(existing_directions) == 1:
-        axes = axes.reshape(-1, 1)
-    if len(tasks) == 1 and len(existing_directions) == 1:
-        axes = np.array([[axes]])
+                            figsize=(5 * len(existing_directions), 4 * len(tasks)),
+                            squeeze=False)
+    # squeeze=False guarantees axes is always a 2D array (handles single
+    # task/direction, e.g. the single 'full' direction case).
     
     # Color scheme
     group_colors = {'Parkinson': '#E74C3C', 'Control': '#3498DB'} if len(groups) == 2 else {}
@@ -2729,14 +2815,15 @@ def analyze_threshold_ratios(diagnosis, kinematics_list, task_names, tracking_sy
         _ctrl_debug_done = False
 
         # Initialize metrics for this threshold
+        _dir_init = {"full": None} if full else {"AP": None, "ML": None, "V": None}
         metrics = {
             f"{diagnosis[0][10:].capitalize()}": {
-                sub_id: {task: {kinematics: {"AP": None, "ML": None, "V": None} 
+                sub_id: {task: {kinematics: dict(_dir_init)
                                for kinematics in kinematics_list} 
                                for task in task_names} 
                                for sub_id in disease_sub_ids},
             "Control": {
-                sub_id: {task: {kinematics: {"AP": None, "ML": None, "V": None} 
+                sub_id: {task: {kinematics: dict(_dir_init)
                                 for kinematics in kinematics_list}
                                 for task in task_names} 
                                 for sub_id in matched_control_sub_ids},
@@ -2767,30 +2854,27 @@ def analyze_threshold_ratios(diagnosis, kinematics_list, task_names, tracking_sy
                             # Average kinectomes
                             avg_kinectomes = np.mean(kinectomes, axis=0)
 
-                            # Strip excluded markers (e.g. upper limb for dual tasks)
+                            # Strip excluded markers + build graphs (full/directional uniform)
                             exclude = EXCLUDE_MARKERS_BY_TASK.get(task_name, [])
-                            effective_marker_list = marker_list
-                            if exclude:
-                                from src.data_utils.data_loader import exclude_markers_from_kinectome
-                                avg_kinectomes, effective_marker_list = exclude_markers_from_kinectome(
-                                    avg_kinectomes, marker_list, exclude
-                                )
+                            graphs, effective_marker_list, _node_labels = _reduce_and_build_graphs(
+                                avg_kinectomes, marker_list, exclude, full
+                            )
 
-                            # Build graphs
-                            graphs = build_graph(avg_kinectomes, effective_marker_list)
-                            
+                            # consensus communities relabelled to match graph nodes
+                            graph_consensus = _consensus_for_graph(consensus_communities, full)
+
                             # Calculate for each direction
-                            directions = ["AP", "ML", "V"]
+                            directions = _direction_labels_for_graphs(graphs)
                             for i, direction in enumerate(directions):
                                 G = graphs[i]
-                                ratios = calculate_community_threshold_ratios(G, consensus_communities, threshold)
+                                ratios = calculate_community_threshold_ratios(G, graph_consensus, threshold)
                                 metrics[group][sub_id][task_name][kinematics][direction] = np.array(ratios)
                                 if not _debug_done or (group == "Control" and not _ctrl_debug_done):
                                     all_w = [d['weight'] for _,_,d in G.edges(data=True)]
                                     print(f"  [debug] {group}/{sub_id} {direction}: "
                                           f"w_range=[{min(all_w):.3f},{max(all_w):.3f}], "
                                           f"ratios={[round(r,3) for r in ratios]}")
-                                    if direction == 'V':
+                                    if direction == directions[-1]:
                                         if group == "Control":
                                             _ctrl_debug_done = True
                                         else:
@@ -2921,18 +3005,14 @@ def plot_threshold_results(all_results, stats_results, save_dir):
         
         # Create plot
         tasks = sorted(df['task'].unique())
-        directions = ['AP', 'ML', 'V']
+        directions = ['full', 'AP', 'ML', 'V']
         existing_directions = [d for d in directions if d in df['direction'].unique()]
         
         fig, axes = plt.subplots(len(tasks), len(existing_directions), 
-                                figsize=(5 * len(existing_directions), 4 * len(tasks)))
-        
-        if len(tasks) == 1:
-            axes = axes.reshape(1, -1)
-        if len(existing_directions) == 1:
-            axes = axes.reshape(-1, 1)
-        if len(tasks) == 1 and len(existing_directions) == 1:
-            axes = np.array([[axes]])
+                                figsize=(5 * len(existing_directions), 4 * len(tasks)),
+                                squeeze=False)
+        # squeeze=False guarantees axes is always a 2D array, so indexing
+        # axes[task_idx, dir_idx] works even for a single task/direction (full).
         
         groups = sorted(df['group'].unique())
         group_colors = {'Parkinson': '#E74C3C', 'Control': '#3498DB'}

@@ -427,10 +427,18 @@ def get_pattern_values_for_subjects(all_kinectomes, group_patterns, full,
                             if matrix is None:
                                 continue
 
-                            G = build_graph(
-                                np.expand_dims(matrix, -1) if matrix.ndim == 2 else matrix,
-                                marker_list
-                            )[0]
+                            # Full kinectome: pass the raw 2D matrix so build_graph
+                            # expands marker_list to per-direction node labels.
+                            # Directional: a single 2D slice must be given a trailing
+                            # axis so build_graph treats it as one direction with
+                            # base-marker node labels.
+                            if full:
+                                G = build_graph(matrix, marker_list)[0]
+                            else:
+                                G = build_graph(
+                                    np.expand_dims(matrix, -1) if matrix.ndim == 2 else matrix,
+                                    marker_list
+                                )[0]
 
                             edge_weights = []
                             edge_weights_with_nodes = []
@@ -702,6 +710,15 @@ def patterns_main(marker_list_affect, diagnosis, kinematics_list, task_names,
     save_dir = Path(result_base_path) / 'patterns'
     save_dir.mkdir(parents=True, exist_ok=True)
 
+    # Direction handling: full kinectomes have a single 'full' matrix, directional
+    # ones have AP/ML/V. This drives the completeness filter, the per-direction
+    # statistical comparison, and the direction token in the output filename.
+    analysis_directions = ['full'] if full else ['AP', 'ML', 'V']
+    # For the filename: full runs are labelled 'full'; directional runs keep the
+    # config-selected PATTERN_DIRECTION for backward-compatible names.
+    from config import PATTERN_DIRECTION as _CFG_PATTERN_DIRECTION
+    pattern_direction_token = 'full' if full else _CFG_PATTERN_DIRECTION
+
     # Validate & label the requested pattern type up front.
     if PATTERN_TYPE not in _PATTERN_TYPE_SPEC:
         raise ValueError(
@@ -718,12 +735,22 @@ def patterns_main(marker_list_affect, diagnosis, kinematics_list, task_names,
 
     pickle_path = save_dir / (
             f"patterns_{PATTERN_TYPE}_{PATTERN_MATRIX_TYPE}_{PATTERN_REFERENCE_GROUP}_"
-            f"{PATTERN_TASK}_{PATTERN_DIRECTION}_{correlation}.pkl"
+            f"{PATTERN_TASK}_{pattern_direction_token}_{correlation}.pkl"
         )
 
-    # Effective markers (after task-specific exclusion) — needed in both branches
+    # Effective markers (after task-specific exclusion) — needed in both branches.
+    # `effective_markers` is the BASE marker list passed to build_graph, which
+    # expands it internally to per-direction labels for full (2D) kinectomes.
     exclude = EXCLUDE_MARKERS_BY_TASK.get(PATTERN_TASK, [])
     effective_markers = [m for m in marker_list_affect if m not in exclude]
+
+    # Start-node iteration set. For full kinectomes the graph nodes are the
+    # expanded per-direction labels ('head_AP', ...), so start nodes must be
+    # expanded too; for directional kinectomes the nodes are the base markers.
+    if full:
+        start_nodes = [f"{m}_{d}" for m in effective_markers for d in ['AP', 'ML', 'V']]
+    else:
+        start_nodes = list(effective_markers)
 
     # ── Load from pickle if it exists ────────────────────────────────────────
     if pickle_path.exists():
@@ -769,14 +796,14 @@ def patterns_main(marker_list_affect, diagnosis, kinematics_list, task_names,
                 kept = False
                 for kin in sub_data[PATTERN_TASK]:
                     dirs = sub_data[PATTERN_TASK][kin]
-                    present = [d for d in ['AP', 'ML', 'V'] if dirs.get(d) is not None]
-                    if len(present) == 3:
+                    present = [d for d in analysis_directions if dirs.get(d) is not None]
+                    if len(present) == len(analysis_directions):
                         task_kinectomes[group][sub_id] = {
                             PATTERN_TASK: {kin: dirs}
                         }
                         kept = True
                     else:
-                        missing = [d for d in ['AP', 'ML', 'V'] if d not in present]
+                        missing = [d for d in analysis_directions if d not in present]
                         dropped_at_filter[group].append(
                             f"{sub_id}(missing:{'/'.join(missing)})")
                 # (kept flag retained for clarity; no-op if already added)
@@ -796,11 +823,11 @@ def patterns_main(marker_list_affect, diagnosis, kinematics_list, task_names,
 
         # Loop over all (pattern_length, start_node) combinations
         all_results = {}
-        total = (PATTERN_MAX_LENGTH - PATTERN_MIN_LENGTH + 1) * len(effective_markers)
+        total = (PATTERN_MAX_LENGTH - PATTERN_MIN_LENGTH + 1) * len(start_nodes)
         done  = 0
 
         for pattern_length in range(PATTERN_MIN_LENGTH, PATTERN_MAX_LENGTH + 1):
-            for start_node in effective_markers:
+            for start_node in start_nodes:
                 done += 1
                 if done % 50 == 0:
                     print(f"  Progress: {done}/{total} combinations...")
@@ -829,7 +856,7 @@ def patterns_main(marker_list_affect, diagnosis, kinematics_list, task_names,
                     continue
 
                 # Compare within each direction separately
-                for direction in ['AP', 'ML', 'V']:
+                for direction in analysis_directions:
                     result = compare_groups_statistical(
                         pattern_values_df,
                         pattern_group=ref_group,
@@ -918,8 +945,9 @@ def patterns_main(marker_list_affect, diagnosis, kinematics_list, task_names,
         summary_df = pd.DataFrame(rows)
 
         # Bonferroni correction within same (pattern_length, direction)
-        # n = number of start nodes tested (after marker exclusion)
-        n_start_nodes = len(effective_markers)
+        # n = number of start nodes tested (after marker exclusion; expanded
+        # per-direction labels for full kinectomes)
+        n_start_nodes = len(start_nodes)
         for (length, direction), grp_idx in summary_df.groupby(
                 ['pattern_length', 'direction']).groups.items():
             p_raw  = summary_df.loc[grp_idx, 'p_value_raw'].astype(float)

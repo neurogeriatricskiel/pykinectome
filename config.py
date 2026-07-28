@@ -33,7 +33,7 @@ from pathlib import Path
 # Work laptop (Windows, Z: drive):
 # RAW_DATA_PATH = Path("Z:\\Keep Control\\Data\\lab dataset\\rawdata")
 # BASE_PATH     = Path("Z:\\Keep Control\\Data\\lab dataset")
-#
+# #
 # Personal laptop (Windows, test data):
 RAW_DATA_PATH = Path("C:\\Users\\Karolina\\Desktop\\dual\\data")
 BASE_PATH     = Path("C:\\Users\\Karolina\\Desktop\\dual")
@@ -61,7 +61,11 @@ KINECTOME_SAVE_PATH = Path("C:\\Users\\Karolina\\Desktop\\pykinectome\\kinectome
 #   ├── patterns/                   ← pattern CSV files & figures
 #   ├── centrality/                 ← centrality pickles & figures
 #   └── time_lag/                   ← time-lag matrices & figures
-RESULT_BASE_PATH = Path("results")
+#
+# Note: a "full/" or "directional/" level is inserted automatically just
+# under this root (see the end of this file), so full-kinectome and
+# directional-kinectome results never mix.
+_RESULT_ROOT = Path("results")
 
 # =============================================================================
 # 2. RECORDING PARAMETERS
@@ -274,7 +278,7 @@ PATTERN_DIRECTION = "AP"
 # "max_weight_3rd" — pick the 3rd highest-|weight| neighbour at each step.
 # "min_weight"     — weakest link: pick the lowest-|weight| neighbour at each step.
 # Each type writes to its own pickle/CSV (the type is in the filename), so results stay separate.
-PATTERN_TYPE = "min_weight"
+PATTERN_TYPE = "max_weight_3rd"
 
 # Pattern path length range to search.
 # Longer paths take more time but capture more complex coordination chains.
@@ -333,4 +337,13 @@ CONSENSUS_COMMUNITIES = [
 #   'std_of_centrality'  = stride-to-stride variability of centrality (needs >=2 cycles)
 #   'centrality_of_std'  = centrality of the std-across-cycles kinectome (needs >=2 cycles)
 # Plots/pickle/CSV are written to their own subfolder named after this value.
-CENTRALITY_MATRIX_MODE = 'centrality_of_std'
+CENTRALITY_MATRIX_MODE = 'std_of_centrality'
+
+
+# =============================================================================
+# DERIVED PATHS (do not edit)
+# =============================================================================
+# Insert a "full/" or "directional/" level under the results root so that
+# full-kinectome and directional-kinectome outputs are kept clearly separate.
+# Defined here, at the end of the file, because it depends on FULL (set above).
+RESULT_BASE_PATH = _RESULT_ROOT / ("full" if FULL else "directional")

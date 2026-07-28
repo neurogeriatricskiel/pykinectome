@@ -14,7 +14,20 @@ import random
 from src.data_utils.permutation import bootstrap_permutation_test, permutation_test_one_p
 
 
-def calc_std_avg_matrices(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, full, correlation_method, interpol):
+def _infer_directions(variability_scores):
+    """Return the direction keys present in the data: ['full'] for full
+    kinectomes, ['AP','ML','V'] for directional ones. Falls back to the
+    directional default if the structure can't be inspected."""
+    for group in variability_scores.values():
+        for sub_data in group.values():
+            for task_data in sub_data.values():
+                for kin_data in task_data.values():
+                    if kin_data:
+                        return list(kin_data.keys())
+    return ['AP', 'ML', 'V']
+
+
+def calc_std_avg_matrices(diagnosis, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, full, correlation_method):
     from src.data_utils.groups import get_matched_groups_for_task
     task_disease_ids, task_control_ids = get_matched_groups_for_task(diagnosis, task_names)
 
@@ -42,9 +55,24 @@ def calc_std_avg_matrices(diagnosis, kinematics_list, task_names, tracking_syste
 
     debug_ids = ['pp006', 'pp008']
 
-    # Track per-task marker lists (may be reduced if EXCLUDE_MARKERS_BY_TASK is set)
+    # Track per-task marker lists (may be reduced if EXCLUDE_MARKERS_BY_TASK is set).
+    # For full kinectomes, labels span the three directions (marker_AP/ML/V) so
+    # they match the (n_markers*3) matrix; for directional, they are the base markers.
     from config import MARKER_LIST_AFFECT as _default_markers
-    marker_lists_per_task = {task: _default_markers.copy() for task in task_names}
+    if full:
+        _default_labels = [f"{m}_{d}" for m in _default_markers for d in ['AP', 'ML', 'V']]
+    else:
+        _default_labels = _default_markers.copy()
+    marker_lists_per_task = {task: _default_labels.copy() for task in task_names}
+
+    # --- Kinectome accounting ---------------------------------------------
+    # Report where kinectomes are loaded from and how many are used per
+    # group/task, plus a grand total, so it's clear what feeds the analysis.
+    from config import KINECTOME_SAVE_PATH as _kin_src
+    print(f"\nLoading kinectomes from: {_kin_src}")
+    print(f"Kinectome type: {'FULL' if full else 'DIRECTIONAL'} | correlation: {correlation_method}\n")
+    # counts[group][task] = [n_subjects_with_data, n_kinectomes_total]
+    kinectome_counts = {}
 
     for kinematics in kinematics_list:
         for sub_id in all_disease_ids + all_control_ids:
@@ -64,41 +92,62 @@ def calc_std_avg_matrices(diagnosis, kinematics_list, task_names, tracking_syste
                             run = run
                         
                         from config import KINECTOME_SAVE_PATH, EXCLUDE_MARKERS_BY_TASK
-                        kinectomes = load_kinectomes(KINECTOME_SAVE_PATH, sub_id, task_name, tracksys, run, kinematics, full, correlation_method, interpol)
+                        kinectomes = load_kinectomes(KINECTOME_SAVE_PATH, sub_id, task_name, tracksys, run, kinematics, full, correlation_method)
+
+                        # Tally how many kinectomes (gait cycles) this subject contributes
+                        n_this = len(kinectomes) if kinectomes else 0
+                        if n_this > 0:
+                            kinectome_counts.setdefault(group, {}).setdefault(task_name, [0, 0])
+                            kinectome_counts[group][task_name][0] += 1
+                            kinectome_counts[group][task_name][1] += n_this
+                            print(f"  {group:>10} | {sub_id} | {task_name} | run={run} | {n_this} kinectomes")
 
                         # Strip excluded markers (e.g. upper limb for dual tasks)
                         exclude = EXCLUDE_MARKERS_BY_TASK.get(task_name, [])
                         if kinectomes and exclude:
                             from config import MARKER_LIST_AFFECT
                             from src.data_utils.data_loader import exclude_markers_from_kinectome
-                            reduced = []
-                            current_markers = MARKER_LIST_AFFECT.copy()
-                            for k in kinectomes:
-                                k_reduced, current_markers = exclude_markers_from_kinectome(k, current_markers, exclude)
-                                reduced.append(k_reduced)
-                            kinectomes = reduced
-                            marker_lists_per_task[task_name] = current_markers
+
+                            if full:
+                                # Full kinectome: rows/cols are markers expanded over the
+                                # three directions (marker_AP, marker_ML, marker_V), so both
+                                # the label list and the exclude list must be expanded to
+                                # match the (n_markers*3) matrix dimension.
+                                _dirs = ['AP', 'ML', 'V']
+                                base_markers = MARKER_LIST_AFFECT.copy()
+                                expanded_markers = [f"{m}_{d}" for m in base_markers for d in _dirs]
+                                expanded_exclude = [f"{m}_{d}" for m in exclude for d in _dirs]
+                                reduced = []
+                                current_markers = expanded_markers
+                                for k in kinectomes:
+                                    k_reduced, current_markers = exclude_markers_from_kinectome(
+                                        k, current_markers, expanded_exclude)
+                                    reduced.append(k_reduced)
+                                kinectomes = reduced
+                                marker_lists_per_task[task_name] = current_markers
+                            else:
+                                reduced = []
+                                current_markers = MARKER_LIST_AFFECT.copy()
+                                for k in kinectomes:
+                                    k_reduced, current_markers = exclude_markers_from_kinectome(k, current_markers, exclude)
+                                    reduced.append(k_reduced)
+                                kinectomes = reduced
+                                marker_lists_per_task[task_name] = current_markers
 
                         try:
-                            if not full:
-                                # Initialize lists to store kinectomes for each direction
-                                all_kinectomes = {"AP": [], "ML": [], "V": []}
-                                
-                                # Collect kinectomes by direction
-                                for kinectome in kinectomes:
-                                    for idx, direction in enumerate(['AP', 'ML', 'V']):
-                                        all_kinectomes[direction].append(kinectome[:, :, idx])
-                            elif full:
-                                all_kinectomes = {'full' : []}
-                                for kinectome in kinectomes:
-                                    all_kinectomes['full'].append(kinectome)
+                            directions = ['full'] if full else ['AP', 'ML', 'V']
 
+                            # Collect kinectomes by direction
+                            all_kinectomes = {d: [] for d in directions}
+                            for kinectome in kinectomes:
+                                if full:
+                                    all_kinectomes['full'].append(kinectome)
+                                else:
+                                    for idx, direction in enumerate(directions):
+                                        all_kinectomes[direction].append(kinectome[:, :, idx])
 
                             # Calculate average and standard deviation kinectomes for each direction
-
-                            for direction in ['AP', 'ML', 'V']:
-                                if full:
-                                    direction = 'full'
+                            for direction in directions:
                                 if all_kinectomes[direction]:  # Check if the list is not empty
                                     # Stack the list of 2D arrays into a 3D array
                                     direction_stack = np.stack(all_kinectomes[direction], axis=0)
@@ -133,6 +182,23 @@ def calc_std_avg_matrices(diagnosis, kinematics_list, task_names, tracking_syste
                         except TypeError:
                             continue
 
+
+    # --- Kinectome count summary ------------------------------------------
+    print("\n" + "=" * 60)
+    print("KINECTOME COUNT SUMMARY")
+    print(f"Source folder: {_kin_src}")
+    print(f"Type: {'FULL' if full else 'DIRECTIONAL'}")
+    print("-" * 60)
+    grand_subjects, grand_kinectomes = 0, 0
+    for group in sorted(kinectome_counts):
+        for task in sorted(kinectome_counts[group]):
+            n_subj, n_kin = kinectome_counts[group][task]
+            grand_subjects += n_subj
+            grand_kinectomes += n_kin
+            print(f"  {group:>10} | {task:<14} | {n_subj} subjects | {n_kin} kinectomes")
+    print("-" * 60)
+    print(f"  TOTAL: {grand_subjects} subject-sessions | {grand_kinectomes} kinectomes")
+    print("=" * 60 + "\n")
 
     # Quick shape check — print matrix size for first available subject
     for group in variability_scores:
@@ -183,7 +249,11 @@ def sample_size_adequacy_analysis(variability_scores, task_names, kinematics_lis
         raise ValueError("This function currently supports comparisons between exactly 2 groups")
     
     group1, group2 = group_names
-    
+
+    # Derive direction keys from the data itself so this works for both
+    # directional ({'AP','ML','V'}) and full ({'full'}) kinectomes.
+    directions = _infer_directions(variability_scores)
+
     # Initialize results
     sample_size_results = {frac: {} for frac in subset_fractions}
     observed_rhos = {} 
@@ -195,7 +265,7 @@ def sample_size_adequacy_analysis(variability_scores, task_names, kinematics_lis
         for kinematic in kinematics_list:
             observed_rhos[task][kinematic] = {}
             
-            for direction in ['AP', 'ML', 'V']:
+            for direction in directions:
                 # Collect all available matrices for observed correlation
                 group1_matrices = []
                 group2_matrices = []
@@ -244,7 +314,7 @@ def sample_size_adequacy_analysis(variability_scores, task_names, kinematics_lis
             sample_size_results[subset_fraction][task] = {}
             for kinematic in kinematics_list:
                 sample_size_results[subset_fraction][task][kinematic] = {}
-                for direction in ['AP', 'ML', 'V']:
+                for direction in directions:
                     sample_size_results[subset_fraction][task][kinematic][direction] = []
         
         # Perform bootstrap iterations for this subset fraction
@@ -254,7 +324,7 @@ def sample_size_adequacy_analysis(variability_scores, task_names, kinematics_lis
             
             for task in task_names:
                 for kinematic in kinematics_list:
-                    for direction in ['AP', 'ML', 'V']:
+                    for direction in directions:
                         # Collect subject IDs that have data for this condition
                         group1_subjects = []
                         group2_subjects = []
@@ -363,16 +433,16 @@ def create_summary_table(sample_size_results, observed_rhos, task_names, directi
         
         print(f"  - Summary table: {filepath}")
 
-def compare_between_groups(diagnosis_list, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list_affect, result_base_path, full, correlation_method, interpol):
+def compare_between_groups(diagnosis_list, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, marker_list_affect, result_base_path, full, correlation_method):
 
     # calculate the matrices of mean and standard deviation of the kinectomes (mean and sd matrix for each subject-task-kinematics-direction)
-    matrices, marker_lists_per_task, task_disease_ids, task_control_ids = calc_std_avg_matrices(diagnosis_list, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, full, correlation_method, interpol)
+    matrices, marker_lists_per_task, task_disease_ids, task_control_ids = calc_std_avg_matrices(diagnosis_list, kinematics_list, task_names, tracking_systems, runs, pd_on, base_path, full, correlation_method)
 
-    bootstrap_avg, observed_avg = bootstrap_permutation_test(matrices, task_names, kinematics_list, marker_list_affect,
+    bootstrap_avg, observed_avg = bootstrap_permutation_test(matrices, task_names, kinematics_list, marker_lists_per_task,
                                                                     result_base_path, correlation_method, n_bootstraps=5000,
                                                                     n_permutations=10000, matrix_type='avg', subset_fraction=0.8,
                                                                     random_seed=42)
-    bootstrap_std, observed_std = bootstrap_permutation_test(matrices, task_names, kinematics_list, marker_list_affect,
+    bootstrap_std, observed_std = bootstrap_permutation_test(matrices, task_names, kinematics_list, marker_lists_per_task,
                                                                     result_base_path, correlation_method, n_bootstraps=5000,
                                                                     n_permutations=10000, matrix_type='std', subset_fraction=0.8,
                                                                     random_seed=42)
