@@ -92,7 +92,7 @@ def main() -> None:
     #     BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL, CORRELATION,
     # )
 
-    print()
+    # print()
 
     # -------------------------------------------------------------------------
     # Step 3 — Time-lag analysis (optional)
@@ -160,7 +160,7 @@ def main() -> None:
     #     matrix_key=STD_MATRIX_KEY,
     # )
 
-    print()
+    # print()
 
     # -------------------------------------------------------------------------
     # Step 8 — Time-resolved (windowed) kinectome analysis (optional)
@@ -184,10 +184,10 @@ def main() -> None:
     # kinectome graphs. Runs at cycle and/or subject level (config TDA_LEVELS).
     # Requires: pip install giotto-tda
     # -------------------------------------------------------------------------
-    tda_kinectome.tda_main(
-        DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON,
-        BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL, CORRELATION,
-    )
+    # tda_kinectome.tda_main(
+    #     DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON,
+    #     BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL, CORRELATION,
+    # )
 
     print()
 

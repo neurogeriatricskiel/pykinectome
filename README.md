@@ -19,10 +19,10 @@ Based on the Keep Control lab dataset (BIDS-formatted optical motion capture, 20
 ## Requirements
 
 - Python ≥ 3.10
-- Dependencies managed with [Poetry](https://python-poetry.org/):
+- Dependencies managed with [uv](https://docs.astral.sh/uv/):
 
 ```bash
-poetry install
+uv sync
 ```
 
 Key packages: `numpy`, `scipy`, `pandas`, `networkx`, `python-louvain`, `matplotlib`, `seaborn`, `statsmodels`, `kineticstoolkit`, `scikit-learn`.
@@ -36,7 +36,7 @@ Key packages: `numpy`, `scipy`, `pandas`, `networkx`, `python-louvain`, `matplot
 2. **Run the pipeline:**
 
 ```bash
-python main.py
+uv run python main.py
 ```
 
 All output folders are created automatically under `RESULT_BASE_PATH`.
