@@ -340,6 +340,56 @@ CONSENSUS_COMMUNITIES = [
 CENTRALITY_MATRIX_MODE = 'std_of_centrality'
 
 
+# --- Stride-to-stride variability analysis (std_analysis.py) ---
+# Which per-subject matrix to compare between groups:
+#   'std'      = standard deviation of the kinectome across gait cycles
+#                (stride-to-stride variability — the main variability signal).
+#   'reconfig' = mean absolute change between consecutive single-cycle
+#                kinectomes (how much coordination reshuffles stride to stride).
+# Both are computed by calc_std_avg_matrices; this only selects which to test.
+STD_MATRIX_KEY = 'std'
+
+
+# --- Time-resolved (windowed) analysis (windowed_analysis.py) ---
+# A "window" is a block of consecutive gait cycles (no recomputation — reads
+# the stored per-cycle kinectomes). Window size auto-adapts per subject to
+# hit WINDOW_TARGET_COUNT windows, so subjects with longer trials get larger
+# windows and everyone yields a comparable number of trajectory points.
+#
+# WINDOW_TARGET_COUNT : desired number of windows per subject.
+# WINDOW_MIN_CYCLES   : minimum cycles per window (never a single cycle).
+# WINDOW_OVERLAP      : fractional overlap between consecutive windows (0.5=50%).
+WINDOW_TARGET_COUNT = 10
+WINDOW_MIN_CYCLES   = 3
+WINDOW_OVERLAP      = 0.5
+
+
+# --- Topological data analysis (tda_kinectome.py) ---
+# Persistent homology of kinectome graphs via giotto-tda (requires
+# `pip install giotto-tda`). Edges are filtered by |weight|; the filtration
+# distance is d = 1 - |weight|, so keeping edges with |weight| >= t equals
+# keeping edges with d <= 1 - t.
+#
+# Which level(s) to analyse (list — both can run in one go):
+#   'cycle'   = every individual per-gait-cycle kinectome (inter-cycle /
+#               within-subject topology; many diagrams per subject).
+#   'subject' = one averaged kinectome per subject (intra-subject /
+#               between-subject topology).
+TDA_LEVELS = ['subject']
+
+# Homology dimensions to compute. Higher dims are much slower on dense graphs.
+TDA_HOMOLOGY_DIMENSIONS = (0, 1, 2)
+
+# Filter thresholds t on |weight| (edges kept when |weight| >= t):
+# (start, stop, step), stop inclusive.
+TDA_THRESHOLD_START = 0.0
+TDA_THRESHOLD_STOP  = 1.0
+TDA_THRESHOLD_STEP  = 0.25
+
+# Death value for features that never die within [0, 1] (must be > 1.0).
+TDA_INFINITY_SENTINEL = 1.5
+
+
 # =============================================================================
 # DERIVED PATHS (do not edit)
 # =============================================================================

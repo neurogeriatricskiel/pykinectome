@@ -26,6 +26,9 @@ from src import (
     patterns,
     modularity,
     centrality,
+    std_analysis,
+    windowed_analysis,
+    tda_kinectome,
 )
 
 from src.data_utils.demographics_statistics import compare_group_demographics
@@ -53,7 +56,11 @@ from config import (
     PATTERN_DIRECTION,
     PATTERN_MIN_LENGTH,
     PATTERN_MAX_LENGTH,
-    CENTRALITY_MATRIX_MODE
+    CENTRALITY_MATRIX_MODE,
+    STD_MATRIX_KEY,
+    WINDOW_TARGET_COUNT,
+    WINDOW_MIN_CYCLES,
+    WINDOW_OVERLAP,
 )
 
 
@@ -105,12 +112,12 @@ def main() -> None:
     # PATTERN_MIN_LENGTH, PATTERN_MAX_LENGTH in config.py.
     # The output pickle filename is generated automatically — no manual naming needed.
     # -------------------------------------------------------------------------
-    patterns.patterns_main(
-        MARKER_LIST_AFFECT, DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS,
-        RUN, PD_ON, BASE_PATH, RESULT_BASE_PATH, FULL, CORRELATION,
-    )
+    # patterns.patterns_main(
+    #     MARKER_LIST_AFFECT, DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS,
+    #     RUN, PD_ON, BASE_PATH, RESULT_BASE_PATH, FULL, CORRELATION,
+    # )
 
-    print()
+    # print()
 
     # -------------------------------------------------------------------------
     # Step 5 — Modularity analysis (optional)
@@ -130,12 +137,57 @@ def main() -> None:
     # Computes weighted degree centrality per body segment and per community,
     # and tests for group differences.
     # -------------------------------------------------------------------------
-    centrality.centrality_main(
-            DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON,
-            BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL,
-            CORRELATION, CONSENSUS_COMMUNITIES,
-            matrix_mode=CENTRALITY_MATRIX_MODE,
-        )
+    # centrality.centrality_main(
+    #         DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON,
+    #         BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL,
+    #         CORRELATION, CONSENSUS_COMMUNITIES,
+    #         matrix_mode=CENTRALITY_MATRIX_MODE,
+    #     )
+
+    # print()
+
+    # -------------------------------------------------------------------------
+    # Step 7 — Stride-to-stride variability analysis (optional)
+    # Compares the std kinectome (variability across gait cycles) between
+    # groups using magnitude-based tests the whole-matrix similarity test in
+    # Step 2 cannot detect: global variability, regional (block) variability,
+    # and edge-wise variability with FDR correction and effect sizes.
+    # Set STD_MATRIX_KEY in config.py ('std' or 'reconfig').
+    # -------------------------------------------------------------------------
+    # std_analysis.std_analysis_main(
+    #     DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON,
+    #     BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL, CORRELATION,
+    #     matrix_key=STD_MATRIX_KEY,
+    # )
+
+    print()
+
+    # -------------------------------------------------------------------------
+    # Step 8 — Time-resolved (windowed) kinectome analysis (optional)
+    # Keeps the temporal axis instead of averaging the whole trial: slides a
+    # window of consecutive gait cycles, builds a trajectory of matrices, and
+    # compares reconfiguration rate, temporal fluctuation, and trial drift
+    # between groups. Window size auto-adapts per subject (see config).
+    # -------------------------------------------------------------------------
+    # windowed_analysis.windowed_analysis_main(
+    #     DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON,
+    #     BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL, CORRELATION,
+    #     target_windows=WINDOW_TARGET_COUNT, min_window=WINDOW_MIN_CYCLES,
+    #     overlap=WINDOW_OVERLAP,
+    # )
+
+    # print()
+
+    # -------------------------------------------------------------------------
+    # Step 9 — Topological data analysis (optional)
+    # Persistent homology (Betti curves + persistence diagrams) of the
+    # kinectome graphs. Runs at cycle and/or subject level (config TDA_LEVELS).
+    # Requires: pip install giotto-tda
+    # -------------------------------------------------------------------------
+    tda_kinectome.tda_main(
+        DIAGNOSIS, KINEMATICS, TASK_NAMES, TRACKING_SYSTEMS, RUN, PD_ON,
+        BASE_PATH, MARKER_LIST_AFFECT, RESULT_BASE_PATH, FULL, CORRELATION,
+    )
 
     print()
 
