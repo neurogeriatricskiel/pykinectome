@@ -1566,3 +1566,235 @@ def plot_community_nodal_strength_single_task(df, consensus_communities, task_pr
             plt.savefig(filepath, dpi=300, bbox_inches='tight')
             plt.close(fig)
             print(f"Saved plot: {filepath}")
+# ===========================================================================
+# Full-kinectome visualisations (single subject, single gait cycle).
+# Valid ONLY for full kinectomes (full=True): a square matrix whose axes are
+# the markers expanded across AP/ML/V via expand_marker_list.
+# ===========================================================================
+
+def _full_labels_and_bases(marker_list, n_nodes, exclude_markers=None):
+    """Return (labels, bases, keep_idx) for a full kinectome.
+
+    labels : expanded node labels ('head_AP', 'head_ML', ...) from
+             expand_marker_list, so ordering matches every other full routine.
+    bases  : base marker per node ('head'), stripping a trailing _AP/_ML/_V,
+             used to group axis labels.
+    keep_idx : indices (into the ORIGINAL n_nodes) of the nodes to keep after
+             dropping every direction of each marker in ``exclude_markers``.
+             Callers must slice the kinectome with np.ix_(keep_idx, keep_idx).
+
+    ``exclude_markers`` holds BASE marker names (e.g. 'elbow_las'), matching the
+    values in config.EXCLUDE_MARKERS_BY_TASK; all 3 directions of each are
+    dropped. None/empty keeps everything.
+
+    Raises if the (pre-exclusion) label count does not match the matrix size -
+    the guard that keeps these functions full-only.
+    """
+    full_labels = expand_marker_list(list(marker_list))
+    if len(full_labels) != n_nodes:
+        raise ValueError(
+            f"visualise_* (full only): expanded label count ({len(full_labels)}) "
+            f"does not match matrix size ({n_nodes}). These functions require a "
+            f"full kinectome built from marker_list via expand_marker_list.")
+
+    def _base(lbl):
+        for ax in ("_AP", "_ML", "_V"):
+            if lbl.endswith(ax):
+                return lbl[:-len(ax)]
+        return lbl
+
+    excl = set(exclude_markers or [])
+    keep_idx = [i for i, l in enumerate(full_labels) if _base(l) not in excl]
+    labels = [full_labels[i] for i in keep_idx]
+    bases = [_base(full_labels[i]) for i in keep_idx]
+    return labels, bases, np.asarray(keep_idx, dtype=int)
+
+
+def visualise_full_kinectome_graph(kinectome, marker_list, sub_id, task_name,
+                                   kinematics, cycle_index, result_base_path,
+                                   correlation_method="pearson",
+                                   edge_threshold=0.0, weight_edges=True,
+                                   figname=None, exclude_markers=None):
+    """Draw a FULL kinectome as a graph: one node per marker-direction
+    (head_AP, head_ML, head_V, ...), all nodes mutually connected.
+
+    Nodes are coloured by direction (AP/ML/V) and placed on a circular layout
+    so the 3 directions form contiguous arcs; edges are the kinectome
+    correlations, coloured by sign (red +, blue -) with width/alpha scaled by
+    |r|. edge_threshold hides weak edges to keep the complete graph readable.
+
+    Full kinectomes only; plots one gait cycle, never a group mean.
+    """
+    kinectome = np.asarray(kinectome, dtype=float)
+    if kinectome.ndim != 2 or kinectome.shape[0] != kinectome.shape[1]:
+        raise ValueError("visualise_full_kinectome_graph expects a single 2D "
+                         "square full kinectome.")
+
+    labels, bases, keep_idx = _full_labels_and_bases(
+        marker_list, kinectome.shape[0], exclude_markers)
+    kinectome = kinectome[np.ix_(keep_idx, keep_idx)]
+    n = len(labels)
+
+    def _dir(lbl):
+        for ax in ("AP", "ML", "V"):
+            if lbl.endswith("_" + ax):
+                return ax
+        return "full"
+    node_dirs = [_dir(l) for l in labels]
+    dir_color = {"AP": "tab:blue", "ML": "tab:orange", "V": "tab:green",
+                 "full": "tab:gray"}
+
+    G = nx.Graph()
+    for i, lbl in enumerate(labels):
+        G.add_node(i, label=lbl, base=bases[i], direction=node_dirs[i])
+    for i in range(n):
+        for j in range(i + 1, n):
+            w = kinectome[i, j]
+            if np.isnan(w) or abs(w) < edge_threshold:
+                continue
+            G.add_edge(i, j, weight=float(w))
+
+    order = sorted(range(n),
+                   key=lambda i: (["AP", "ML", "V", "full"].index(node_dirs[i]), i))
+    pos = {}
+    for rank, node in enumerate(order):
+        theta = 2.0 * np.pi * rank / n
+        pos[node] = (np.cos(theta), np.sin(theta))
+
+    fig, ax = plt.subplots(figsize=(13, 13))
+    weights = np.array([abs(d["weight"]) for _, _, d in G.edges(data=True)])
+    wmax = weights.max() if weights.size else 1.0
+    for u, v, d in G.edges(data=True):
+        w = d["weight"]
+        a = min(1.0, 0.08 + 0.92 * (abs(w) / wmax)) if wmax > 0 else 0.2
+        lw = (0.3 + 2.7 * (abs(w) / wmax)) if weight_edges else 0.6
+        ax.plot([pos[u][0], pos[v][0]], [pos[u][1], pos[v][1]],
+                color=("tab:red" if w >= 0 else "tab:blue"),
+                alpha=a, linewidth=lw, zorder=1)
+
+    for i in range(n):
+        ax.scatter(*pos[i], s=260, color=dir_color[node_dirs[i]],
+                   edgecolors="black", linewidths=0.6, zorder=3)
+
+    for i in range(n):
+        x, y = pos[i]
+        theta = np.degrees(np.arctan2(y, x))
+        ha = "left" if x >= 0 else "right"
+        rot = theta if x >= 0 else theta + 180
+        ax.text(1.08 * x, 1.08 * y, labels[i], rotation=rot,
+                rotation_mode="anchor", ha=ha, va="center", fontsize=14, zorder=4)
+
+    from matplotlib.lines import Line2D
+    dir_handles = [Line2D([0], [0], marker="o", linestyle="", markersize=10,
+                          markerfacecolor=dir_color[d], markeredgecolor="black",
+                          label=d) for d in ["AP", "ML", "V"] if d in node_dirs]
+    sign_handles = [Line2D([0], [0], color="tab:red", lw=3, label="positive"),
+                    Line2D([0], [0], color="tab:blue", lw=3, label="negative")]
+    leg1 = ax.legend(handles=dir_handles, title="node direction",
+                     loc="upper left", bbox_to_anchor=(1.14, 1.18), fontsize=15,
+                     title_fontsize=16)
+    ax.add_artist(leg1)
+    ax.legend(handles=sign_handles, title="edge sign",
+              loc="upper left", bbox_to_anchor=(1.14, 1.02), fontsize=15,
+              title_fontsize=16)
+
+    thr_txt = f", |r| >= {edge_threshold:g}" if edge_threshold > 0 else ""
+    fig.suptitle(f"Full kinectome graph - {sub_id}, {task_name}, "
+                 f"{kinematics.upper()}, cycle {cycle_index}{thr_txt}",
+                 fontsize=20, y=1.02)
+    ax.set_aspect("equal")
+    ax.axis("off")
+
+    result_folder = Path(result_base_path) / "kinectome_graphs"
+    result_folder.mkdir(parents=True, exist_ok=True)
+    if figname is None:
+        figname = (f"graph_{sub_id}_{task_name}_{kinematics}_"
+                   f"{correlation_method}_full_cycle{cycle_index:03d}.png")
+    plt.savefig(result_folder / figname, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Saved kinectome graph: {result_folder / figname}")
+
+
+def visualise_full_kinectome_matrix(kinectome, marker_list, sub_id, task_name,
+                                    kinematics, cycle_index, result_base_path,
+                                    correlation_method="pearson", figname=None,
+                                    exclude_markers=None):
+    """Plot a FULL kinectome heatmap with grouped marker-direction labels: each
+    base marker (head, ster, ...) spans its 3 direction rows (AP/ML/V) and is
+    annotated once with a curly-brace bracket + base name, instead of repeating
+    the marker on every tick.
+
+    Full kinectomes only; plots one gait cycle, never a group mean.
+    """
+    kinectome = np.asarray(kinectome, dtype=float)
+    if kinectome.ndim != 2 or kinectome.shape[0] != kinectome.shape[1]:
+        raise ValueError("visualise_full_kinectome_matrix expects a single 2D "
+                         "square full kinectome.")
+
+    labels, bases, keep_idx = _full_labels_and_bases(
+        marker_list, kinectome.shape[0], exclude_markers)
+    kinectome = kinectome[np.ix_(keep_idx, keep_idx)]
+    n = len(labels)
+
+    def _dir(lbl):
+        for ax in ("AP", "ML", "V"):
+            if lbl.endswith("_" + ax):
+                return ax
+        return lbl
+    tick_txt = [_dir(l) for l in labels]
+
+    groups, start = [], 0
+    for i in range(1, n + 1):
+        if i == n or bases[i] != bases[start]:
+            groups.append((bases[start], start, i))
+            start = i
+
+    vmin, vmax = (-1, 1) if np.nanmin(kinectome) < 0 else (0, 1)
+
+    fig, ax = plt.subplots(figsize=(16, 14))
+    mask = np.triu(np.ones_like(kinectome, dtype=bool), k=1)
+    sns.heatmap(kinectome, mask=mask, cmap="coolwarm", vmin=vmin, vmax=vmax,
+                center=0, square=True, ax=ax,
+                xticklabels=tick_txt, yticklabels=tick_txt,
+                cbar_kws={"label": "correlation"})
+    ax.set_xticklabels(tick_txt, rotation=90, fontsize=12)
+    ax.set_yticklabels(tick_txt, rotation=0, fontsize=12)
+    # bigger colorbar label + ticks
+    cbar = ax.collections[0].colorbar
+    cbar.set_label("correlation", fontsize=15)
+    cbar.ax.tick_params(labelsize=12)
+
+    def _brace_y(y0, y1, base):
+        xb = -1.8
+        ax.plot([xb, xb - 0.6, xb - 0.6, xb],
+                [y0 + 0.1, y0 + 0.1, y1 - 0.1, y1 - 0.1],
+                color="black", linewidth=1.0, clip_on=False)
+        ax.text(xb - 1.0, (y0 + y1) / 2, base, ha="right", va="center",
+                fontsize=14, fontweight="bold", clip_on=False)
+
+    def _brace_x(x0, x1, base):
+        yb = n + 1.8
+        ax.plot([x0 + 0.1, x0 + 0.1, x1 - 0.1, x1 - 0.1],
+                [yb, yb + 0.6, yb + 0.6, yb],
+                color="black", linewidth=1.0, clip_on=False)
+        ax.text((x0 + x1) / 2, yb + 1.0, base, ha="center", va="top",
+                fontsize=14, fontweight="bold", rotation=90, clip_on=False)
+
+    for base, s, e in groups:
+        _brace_y(s, e, base)
+        _brace_x(s, e, base)
+        if s != 0:
+            ax.axhline(s, color="gray", linewidth=0.5, alpha=0.5)
+            ax.axvline(s, color="gray", linewidth=0.5, alpha=0.5)
+
+    ax.set_title(f"Full kinectome - {sub_id}, {task_name}, "
+                 f"{kinematics.upper()}, cycle {cycle_index}", fontsize=20, y=1.04)
+
+    result_folder = Path(result_base_path) / "kinectomes"
+    result_folder.mkdir(parents=True, exist_ok=True)
+    if figname is None:
+        figname = (f"kinectome_{sub_id}_{task_name}_{kinematics}_"
+                   f"{correlation_method}_full_cycle{cycle_index:03d}.png")
+    plt.savefig(result_folder / figname, dpi=400, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Saved full kinectome heatmap: {result_folder / figname}")
